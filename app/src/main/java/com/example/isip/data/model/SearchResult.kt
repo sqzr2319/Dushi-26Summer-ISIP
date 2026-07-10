@@ -1,9 +1,9 @@
-package com.example.photoagent.data.model
+package com.example.isip.data.model
 
 /**
  * 检索结果数据类
- * 
- * 这是模糊检索Skill（孙长毅）的输出格式
+ *
+ * 这是模糊检索的输出格式
  */
 data class SearchResult(
     val query: String,                      // 用户原始查询

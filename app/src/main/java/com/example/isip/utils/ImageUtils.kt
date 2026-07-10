@@ -1,9 +1,11 @@
-package com.example.photoagent.utils
+package com.example.isip.utils
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
@@ -91,12 +93,25 @@ object ImageUtils {
      * Bitmap转Base64
      */
     fun bitmapToBase64(bitmap: Bitmap): String {
-        import android.util.Base64
-        import java.io.ByteArrayOutputStream
-
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
         val bytes = stream.toByteArray()
         return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
+    /**
+     * 计算两张图片的相似度（简单的尺寸比较）
+     */
+    fun calculateSimilarity(photo1: com.example.isip.data.model.Photo, photo2: com.example.isip.data.model.Photo): Float {
+        // 简单实现：比较文件大小和尺寸
+        val sizeDiff = kotlin.math.abs(photo1.sizeBytes - photo2.sizeBytes).toFloat() /
+                      kotlin.math.max(photo1.sizeBytes, photo2.sizeBytes)
+        val widthDiff = kotlin.math.abs(photo1.width - photo2.width).toFloat() /
+                       kotlin.math.max(photo1.width, photo2.width)
+        val heightDiff = kotlin.math.abs(photo1.height - photo2.height).toFloat() /
+                        kotlin.math.max(photo1.height, photo2.height)
+
+        // 相似度 = 1 - 平均差异
+        return 1f - (sizeDiff + widthDiff + heightDiff) / 3f
     }
 }

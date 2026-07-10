@@ -60,6 +60,9 @@ dependencies {
     // Extended Icons
     implementation(libs.androidx.compose.material.icons.extended)
 
+    // Gson for JSON parsing
+    implementation(libs.gson)
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

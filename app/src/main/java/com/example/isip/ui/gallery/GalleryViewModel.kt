@@ -1,17 +1,31 @@
 package com.example.isip.ui.gallery
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.isip.data.PhotoRepository
+import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
+import com.example.isip.ui.model.AnalysisProgressUi
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class GalleryViewModel : ViewModel() {
+class GalleryViewModel(application: Application) : AndroidViewModel(application) {
+
+    // 初始化 Repository 和 UseCase
+    private val repository = PhotoRepository.getInstance(application)
+    private val analyzeUseCase = AnalyzePhotosUseCase(repository)
+
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
+
+    private val dateFormatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     fun onEvent(event: GalleryUiEvent) {
         when (event) {
@@ -28,7 +42,7 @@ class GalleryViewModel : ViewModel() {
     }
 
     private fun requestPermission() {
-        // TODO: Implement permission request logic
+        // 权限已授予后加载照片
         viewModelScope.launch {
             _uiState.update { it.copy(permissionGranted = true) }
             loadPhotos()
@@ -37,57 +51,96 @@ class GalleryViewModel : ViewModel() {
 
     private fun loadPhotos() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            // TODO: Load actual photos from repository
-            // Simulating with mock data for now
-            val mockPhotos = listOf(
-                PhotoUiModel(
-                    id = "1",
-                    uri = "content://media/external/images/media/1",
-                    takenAtText = "2024-07-10 10:30",
-                    categories = listOf("风景"),
-                    tags = listOf("海滩", "日落"),
-                    isAnalyzed = true
-                ),
-                PhotoUiModel(
-                    id = "2",
-                    uri = "content://media/external/images/media/2",
-                    takenAtText = "2024-07-09 15:20",
-                    categories = listOf("人物"),
-                    tags = listOf("家人", "聚会"),
-                    isAnalyzed = true
-                ),
-                PhotoUiModel(
-                    id = "3",
-                    uri = "content://media/external/images/media/3",
-                    takenAtText = "2024-07-08 09:15",
-                    categories = listOf("截图"),
-                    tags = listOf("聊天记录"),
-                    hasPrivacyAlert = true,
-                    isAnalyzed = true
-                )
-            )
+            try {
+                // 从 Repository 加载真实照片
+                val photos = repository.getAllPhotos()
 
-            _uiState.update {
-                it.copy(
-                    photos = mockPhotos,
-                    isLoading = false
-                )
+                // 转换为 UI 模型
+                val photoUiModels = photos.map { photo ->
+                    val analysisResult = repository.getAnalysisResult(photo.id)
+
+                    PhotoUiModel(
+                        id = photo.id,
+                        uri = repository.getPhotoUri(photo.id).toString(),
+                        takenAtText = dateFormatter.format(Date(photo.dateTaken)),
+                        categories = analysisResult?.categories ?: emptyList(),
+                        tags = analysisResult?.tags ?: emptyList(),
+                        hasPrivacyAlert = false, // TODO: 从分析结果判断
+                        isAnalyzed = analysisResult != null
+                    )
+                }
+
+                _uiState.update {
+                    it.copy(
+                        photos = photoUiModels,
+                        isLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "加载照片失败: ${e.message}"
+                    )
+                }
             }
         }
     }
 
     private fun startAnalysis() {
-        // TODO: Start analysis task
+        viewModelScope.launch {
+            try {
+                analyzeUseCase.analyzeAllPhotos()
+                    .collect { progress ->
+                        // 更新分析进度
+                        _uiState.update {
+                            it.copy(
+                                analysisProgress = AnalysisProgressUi(
+                                    total = progress.total,
+                                    completed = progress.completed,
+                                    currentTaskText = progress.message,
+                                    progress = progress.progressPercent(),
+                                    canPause = true,
+                                    canCancel = true
+                                )
+                            )
+                        }
+
+                        // 分析完成后清除进度并重新加载照片
+                        if (progress.completed >= progress.total) {
+                            _uiState.update { it.copy(analysisProgress = null) }
+                            loadPhotos()
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        analysisProgress = null,
+                        errorMessage = "分析失败: ${e.message}"
+                    )
+                }
+            }
+        }
     }
 
     private fun pauseAnalysis() {
-        // TODO: Pause analysis task
+        // TODO: 实现暂停逻辑
+        _uiState.update {
+            it.copy(
+                analysisProgress = it.analysisProgress?.copy(canPause = false)
+            )
+        }
     }
 
     private fun resumeAnalysis() {
-        // TODO: Resume analysis task
+        // TODO: 实现恢复逻辑
+        _uiState.update {
+            it.copy(
+                analysisProgress = it.analysisProgress?.copy(canPause = true)
+            )
+        }
     }
 
     private fun selectCategory(category: String) {
@@ -110,9 +163,9 @@ class GalleryViewModel : ViewModel() {
     }
 
     private fun deleteSelected() {
-        // TODO: Implement delete logic with confirmation
         viewModelScope.launch {
             val selectedIds = _uiState.value.selectedPhotoIds
+            // TODO: 实际删除照片文件
             _uiState.update {
                 it.copy(
                     photos = it.photos.filterNot { photo -> photo.id in selectedIds },

@@ -1,16 +1,10 @@
-package com.example.photoagent.data.model
-
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+package com.example.isip.data.model
 
 /**
- * 照片实体类
- * 对应数据库 photos 表
+ * 照片实体类（简化版，移除 Room 注解）
  */
-@Entity(tableName = "photos")
 data class Photo(
-    @PrimaryKey
-    val id: String,                 // 照片唯一标识（可用文件路径hash或UUID）
+    val id: String,                 // 照片唯一标识
     val filePath: String,           // 文件绝对路径
     val fileName: String,           // 文件名
     val dateTaken: Long,            // 拍摄时间 (Unix timestamp)

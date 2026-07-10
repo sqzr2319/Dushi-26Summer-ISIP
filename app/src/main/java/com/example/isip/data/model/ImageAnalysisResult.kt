@@ -1,18 +1,12 @@
-package com.example.photoagent.data.model
-
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+package com.example.isip.data.model
 
 /**
- * 图片分析结果数据类
- * 对应数据库 analysis_results 表
- * 
- * 这是图片内容理解Skill（李佳乔）的输出格式
+ * 图片分析结果数据类（简化版，移除 Room 注解）
+ *
+ * 这是图片内容理解的输出格式
  * 也是各模块间传递的核心数据结构
  */
-@Entity(tableName = "analysis_results")
 data class ImageAnalysisResult(
-    @PrimaryKey
     val photoId: String,                 // 对应 Photo.id
     val categories: List<String>,        // 分类列表，如 ["人物", "家庭", "室内"]
     val ocrText: String,                 // OCR识别出的文字

@@ -1,9 +1,9 @@
-package com.example.photoagent.data.model
+package com.example.isip.data.model
 
 /**
  * 整理方案数据类
- * 
- * 这是整理策略生成Skill（李佳乔）的输出格式
+ *
+ * 这是整理策略生成的输出格式
  */
 data class OrganizationPlan(
     val albums: List<EventAlbum>,           // 事件相册列表

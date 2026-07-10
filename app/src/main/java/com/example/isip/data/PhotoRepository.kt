@@ -1,4 +1,4 @@
-package com.example.photoagent.data
+package com.example.isip.data
 
 import android.content.ContentUris
 import android.content.Context
@@ -6,23 +6,27 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import com.example.photoagent.data.model.Photo
+import com.example.isip.data.model.ImageAnalysisResult
+import com.example.isip.data.model.Photo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
- * 相册数据仓库
- * 负责读取手机本地相册照片
+ * 相册数据仓库（重构版：使用内存存储 + MediaStore）
+ * 负责读取手机本地相册照片和管理分析结果
  */
 class PhotoRepository(
     private val context: Context
 ) {
 
+    // 使用内存存储代替数据库
+    private val analysisResults = MutableStateFlow<Map<String, ImageAnalysisResult>>(emptyMap())
+
     /**
-     * 获取所有照片列表
-     * @return List<Photo> 照片列表
+     * 获取所有照片列表（从 MediaStore 读取）
      */
     suspend fun getAllPhotos(): List<Photo> = withContext(Dispatchers.IO) {
         val photos = mutableListOf<Photo>()
@@ -93,7 +97,10 @@ class PhotoRepository(
             null,
             null
         )
-        return@withContext cursor?.count ?: 0
+        cursor?.use {
+            return@withContext it.count
+        }
+        return@withContext 0
     }
 
     /**
@@ -110,6 +117,91 @@ class PhotoRepository(
     suspend fun getPhotoById(photoId: String): Photo? = withContext(Dispatchers.IO) {
         val all = getAllPhotos()
         return@withContext all.find { it.id == photoId }
+    }
+
+    /**
+     * 获取照片的Uri
+     */
+    fun getPhotoUri(photoId: String): Uri {
+        return ContentUris.withAppendedId(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            photoId.toLong()
+        )
+    }
+
+    /**
+     * 保存分析结果（内存存储）
+     */
+    suspend fun saveAnalysisResult(result: ImageAnalysisResult) {
+        analysisResults.value = analysisResults.value + (result.photoId to result)
+    }
+
+    /**
+     * 获取分析结果
+     */
+    suspend fun getAnalysisResult(photoId: String): ImageAnalysisResult? {
+        return analysisResults.value[photoId]
+    }
+
+    /**
+     * 获取所有已分析的照片
+     */
+    fun getAnalyzedPhotos(): Flow<List<Photo>> {
+        return analysisResults.map { results ->
+            getAllPhotos().filter { photo ->
+                results.containsKey(photo.id)
+            }
+        }
+    }
+
+    /**
+     * 获取未分析的照片
+     */
+    suspend fun getUnanalyzedPhotos(): List<Photo> {
+        val allPhotos = getAllPhotos()
+        val analyzedIds = analysisResults.value.keys
+        return allPhotos.filter { it.id !in analyzedIds }
+    }
+
+    /**
+     * 根据分类获取照片
+     */
+    suspend fun getPhotosByCategory(category: String): List<Photo> {
+        val allPhotos = getAllPhotos()
+        return allPhotos.filter { photo ->
+            val result = analysisResults.value[photo.id]
+            result?.categories?.contains(category) == true
+        }
+    }
+
+    /**
+     * 根据标签搜索照片
+     */
+    suspend fun searchPhotosByTags(tags: List<String>): List<Photo> {
+        val allPhotos = getAllPhotos()
+        return allPhotos.filter { photo ->
+            val result = analysisResults.value[photo.id]
+            result?.tags?.any { tag -> tags.contains(tag) } == true
+        }
+    }
+
+    /**
+     * 根据 OCR 文本搜索照片
+     */
+    suspend fun searchPhotosByText(query: String): List<Photo> {
+        val allPhotos = getAllPhotos()
+        return allPhotos.filter { photo ->
+            val result = analysisResults.value[photo.id]
+            result?.ocrText?.contains(query, ignoreCase = true) == true ||
+            result?.description?.contains(query, ignoreCase = true) == true
+        }
+    }
+
+    /**
+     * 清空所有分析结果
+     */
+    suspend fun clearAllAnalysis() {
+        analysisResults.value = emptyMap()
     }
 
     /**
@@ -145,13 +237,14 @@ class PhotoRepository(
         }
     }
 
-    /**
-     * 获取照片的Uri
-     */
-    fun getPhotoUri(photoId: String): Uri {
-        return ContentUris.withAppendedId(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            photoId.toLong()
-        )
+    companion object {
+        @Volatile
+        private var INSTANCE: PhotoRepository? = null
+
+        fun getInstance(context: Context): PhotoRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: PhotoRepository(context.applicationContext).also { INSTANCE = it }
+            }
+        }
     }
 }
