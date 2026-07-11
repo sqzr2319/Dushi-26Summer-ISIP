@@ -34,7 +34,7 @@ class PhotoRepository(
      */
     suspend fun getAllPhotos(): List<Photo> = withContext(Dispatchers.IO) {
         val mediaPhotos = scanMediaStorePhotos()
-        photoDao.insertPhotos(mediaPhotos.map { it.toEntity() })
+        photoDao.upsertScannedPhotos(mediaPhotos.map { it.toEntity() })
         return@withContext photoDao.getAllPhotos().map { it.toPhoto() }
     }
 
@@ -84,6 +84,19 @@ class PhotoRepository(
         val photoEntity = photoDao.getPhotoByAssetId(photoId) ?: return@withContext null
         val aiEntity = photoAiDao.getPhotoAiByPhotoId(photoEntity.id) ?: return@withContext null
         return@withContext aiEntity.toModel(photoEntity.assetId)
+    }
+
+    /**
+     * Gets all persisted analysis records with one Room query.
+     *
+     * Search previously rescanned MediaStore and then queried the database once per
+     * photo, making its latency proportional to the entire gallery rather than to
+     * the already-indexed analysis records.
+     */
+    suspend fun getAllAnalysisResults(): List<ImageAnalysisResult> = withContext(Dispatchers.IO) {
+        photoAiDao.getAllPhotoAiWithAssetIds().map { row ->
+            row.analysis.toModel(row.assetId)
+        }
     }
 
     /**
@@ -246,8 +259,8 @@ class PhotoRepository(
             scene = null,
             ocrText = ocrText,
             embeddingPath = null,
-            modelName = null,
-            modelVersion = null,
+            modelName = modelName,
+            modelVersion = modelVersion,
             processedAt = analyzedAt
         )
     }
@@ -262,7 +275,9 @@ class PhotoRepository(
             tags = tags,
             description = shortCaption ?: "",
             confidence = 0.7f,
-            analyzedAt = processedAt ?: System.currentTimeMillis()
+            analyzedAt = processedAt ?: System.currentTimeMillis(),
+            modelName = modelName,
+            modelVersion = modelVersion
         )
     }
 

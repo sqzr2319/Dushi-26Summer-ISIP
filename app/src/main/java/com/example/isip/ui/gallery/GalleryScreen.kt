@@ -2,6 +2,7 @@ package com.example.isip.ui.gallery
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Photo
@@ -10,6 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.isip.ui.common.*
@@ -22,11 +26,24 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val filteredPhotos = remember(uiState.photos, uiState.activeCategory) {
         viewModel.getFilteredPhotos()
     }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Returning from PhotoDetailScreen resumes this destination but reuses its
+    // ViewModel. Refresh so newly saved analysis results become visible.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshPhotos()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -46,7 +63,18 @@ fun GalleryScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("相册") }
+                    title = { Text("相册") },
+                    actions = {
+                        IconButton(
+                            onClick = { viewModel.onEvent(GalleryUiEvent.StartAnalysis) },
+                            enabled = uiState.analysisProgress == null
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "分析尚未使用当前模型的照片"
+                            )
+                        }
+                    }
                 )
             }
         }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
+import com.example.isip.data.ai.Qwen35PhotoContentAnalyzer
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import java.text.SimpleDateFormat
@@ -25,6 +26,7 @@ data class PhotoDetailUiState(
 
 sealed interface PhotoDetailUiEvent {
     data object StartAnalysis : PhotoDetailUiEvent
+    data object Reanalyze : PhotoDetailUiEvent
     data object Delete : PhotoDetailUiEvent
     data object CopyOcrText : PhotoDetailUiEvent
 }
@@ -33,7 +35,10 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     // 初始化 Repository 和 UseCase
     private val repository = PhotoRepository.getInstance(application)
-    private val analyzeUseCase = AnalyzePhotosUseCase(repository)
+    private val analyzeUseCase = AnalyzePhotosUseCase(
+        repository,
+        Qwen35PhotoContentAnalyzer(application)
+    )
 
     private val _uiState = MutableStateFlow(PhotoDetailUiState())
     val uiState: StateFlow<PhotoDetailUiState> = _uiState.asStateFlow()
@@ -92,18 +97,19 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
     fun onEvent(event: PhotoDetailUiEvent) {
         when (event) {
             is PhotoDetailUiEvent.StartAnalysis -> startAnalysis()
+            is PhotoDetailUiEvent.Reanalyze -> startAnalysis(force = true)
             is PhotoDetailUiEvent.Delete -> deletePhoto()
             is PhotoDetailUiEvent.CopyOcrText -> copyOcrText()
         }
     }
 
-    private fun startAnalysis() {
+    private fun startAnalysis(force: Boolean = false) {
         val photoId = _uiState.value.photo?.id ?: return
 
         viewModelScope.launch {
             try {
                 // 触发单张照片分析
-                val result = analyzeUseCase.analyzeSinglePhoto(photoId)
+                val result = analyzeUseCase.analyzeSinglePhoto(photoId, force)
 
                 if (result != null) {
                     // 重新加载照片以显示分析结果

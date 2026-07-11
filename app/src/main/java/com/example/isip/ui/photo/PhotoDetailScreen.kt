@@ -194,6 +194,13 @@ fun PhotoDetailScreen(
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
+                                Spacer(modifier = Modifier.height(20.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.onEvent(PhotoDetailUiEvent.Reanalyze) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("重新使用 AI 模型分析")
+                                }
                             } else {
                                 Button(
                                     onClick = { viewModel.onEvent(PhotoDetailUiEvent.StartAnalysis) },

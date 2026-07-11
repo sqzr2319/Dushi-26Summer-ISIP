@@ -13,7 +13,9 @@ data class ImageAnalysisResult(
     val tags: List<String>,              // 标签列表，如 ["#旅行", "#冬天", "#哈尔滨"]
     val description: String,             // 一句话描述
     val confidence: Float,               // 综合置信度 0.0 ~ 1.0
-    val analyzedAt: Long = System.currentTimeMillis()  // 分析时间
+    val analyzedAt: Long = System.currentTimeMillis(), // 分析时间
+    val modelName: String? = null,
+    val modelVersion: String? = null
 ) {
     // 辅助方法：判断是否有有效内容
     fun hasContent(): Boolean = categories.isNotEmpty() || ocrText.isNotBlank() || tags.isNotEmpty()
