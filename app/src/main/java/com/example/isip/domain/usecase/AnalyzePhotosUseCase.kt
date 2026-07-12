@@ -63,7 +63,7 @@ class AnalyzePhotosUseCase(
         val existing = photoRepository.getAnalysisResult(photoId)
         if (!force && isCurrentModelResult(existing)) return existing
 
-        return analyzePhoto(photo).also(photoRepository::saveAnalysisResult)
+        return analyzePhoto(photo).also { photoRepository.saveAnalysisResult(it) }
     }
 
     /** Analyzes photos that do not yet use the active visual model. */
