@@ -25,6 +25,27 @@ android {
             "QWEN35_ANALYSIS_URL",
             "\"http://10.0.2.2:8000/analyze\""
         )
+
+        // 配置 NDK
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
+
+        // 配置 CMake
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++17")
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
+    }
+
+    // 配置 CMake 路径
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -78,12 +99,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     // llama.cpp for GGUF model inference
-    // Maven libraries not available - using alternative approach:
-    // We'll implement a simplified version using file-based inference or
-    // prepare for future JNI integration when llama.cpp Android library becomes available
-
-    // For now, the code uses a placeholder implementation that can be replaced
-    // when a proper llama.cpp Android library is released
+    // Note: de.kherud:llama library API is not compatible with Android
+    // Will use a custom wrapper or wait for proper Android llama.cpp library
+    // implementation(libs.llama.cpp.java)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -4,66 +4,24 @@ This directory contains GGUF format models for on-device inference using llama.c
 
 ## Required Model Files
 
-### Gemma-4-E2B-it GGUF (Recommended)
-
 **Files**:
-1. `gemma-4-E2B_q4_0-it.gguf` - 主模型文件
-   - **Size**: ~3.12 GB
+1. `Qwen3.5-2B-UD-Q2_K_XL.gguf` - 主模型文件
    - **Type**: Vision-Language Multimodal Model
-   - **Quantization**: Q4_0 (4-bit)
+   - **Quantization**: Q2_K_XL (2-bit)
    
-2. `gemma-4-E2B-it-mmproj.gguf` - 多模态投影层
-   - **Size**: ~0.92 GB
+2. `mmproj-F16.gguf` - 多模态投影层
    - **Required for**: Image analysis
 
-**Total Size**: ~4 GB
-
-**Capabilities**:
-- Image classification
-- OCR (text recognition)
-- Tag generation
-- Natural language description
-- Privacy content detection
-
 ## How to Download the Model
-
-### 使用 hf-mirror.com 镜像源下载
 
 ```bash
 # 设置 Hugging Face 镜像源
 export HF_ENDPOINT=https://hf-mirror.com
 
-# 方法 1: 使用 huggingface-cli
-pip install huggingface-hub
-huggingface-cli download google/gemma-4-E2B-it-qat-q4_0-gguf \
-  --local-dir ./models \
-  --local-dir-use-symlinks False
-
-# 方法 2: 使用 git clone（需要 git-lfs）
-git lfs install
-GIT_LFS_SKIP_SMUDGE=0 git clone https://hf-mirror.com/google/gemma-4-E2B-it-qat-q4_0-gguf ./models
-
-# 方法 3: 直接下载（推荐用于单个文件）
-wget https://hf-mirror.com/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B_q4_0-it.gguf
-wget https://hf-mirror.com/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B-it-mmproj.gguf
-```
-
-### Windows PowerShell 下载
-
-```powershell
-# 设置镜像源
-$env:HF_ENDPOINT = "https://hf-mirror.com"
-
-# 使用 Invoke-WebRequest 下载
-$baseUrl = "https://hf-mirror.com/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main"
-Invoke-WebRequest -Uri "$baseUrl/gemma-4-E2B_q4_0-it.gguf" -OutFile "gemma-4-E2B_q4_0-it.gguf"
-Invoke-WebRequest -Uri "$baseUrl/gemma-4-E2B-it-mmproj.gguf" -OutFile "gemma-4-E2B-it-mmproj.gguf"
-
-# 或使用 huggingface-cli
-pip install huggingface-hub
-huggingface-cli download google/gemma-4-E2B-it-qat-q4_0-gguf `
-  --local-dir models `
-  --local-dir-use-symlinks False
+hf download unsloth/Qwen3.5-2B-GGUF \
+    --local-dir unsloth/Qwen3.5-2B-GGUF \
+    --include "*mmproj-F16*" \
+    --include "*UD-Q2_K_XL*"
 ```
 
 ## Placing the Model Files
@@ -73,18 +31,8 @@ huggingface-cli download google/gemma-4-E2B-it-qat-q4_0-gguf `
 ```
 app/src/main/assets/models/
 ├── README.md                           (this file)
-├── gemma-4-E2B_q4_0-it.gguf           (主模型, ~3.12 GB)
-└── gemma-4-E2B-it-mmproj.gguf         (多模态投影层, ~0.92 GB)
-```
-
-**验证文件：**
-```bash
-cd app/src/main/assets/models/
-ls -lh *.gguf
-
-# 应该看到：
-# -rw-r--r-- 1 user user 3.1G  gemma-4-E2B_q4_0-it.gguf
-# -rw-r--r-- 1 user user 945M  gemma-4-E2B-it-mmproj.gguf
+├── Qwen3.5-2B-UD-Q2_K_XL.gguf         (主模型)
+└── mmproj-F16.gguf                     (多模态投影层)
 ```
 
 ## Model Integration Status
@@ -94,7 +42,7 @@ ls -lh *.gguf
 ✅ **已完成：**
 - GGUF 模型路径配置
 - GemmaInferenceEngine 改写为支持 llama.cpp
-- ModelConfig 更新为 Q4_0 量化
+- ModelConfig 更新为 Q2_K_XL 量化
 - 构建配置更新
 
 ⚠️ **待完成：**
@@ -150,26 +98,20 @@ cp libllama.so ../app/src/main/jniLibs/arm64-v8a/
 
 ## 使用其他 GGUF 模型
 
-如果 Gemma-4-E2B 不可用，可以使用这些替代模型：
-
-### 仅文本模型（更小，无图像支持）
-- **Gemma 2B IT** (~1.5 GB Q4_0)
-- **Phi-3-mini** (~2.3 GB Q4_K_M)
-- **Qwen2-1.5B** (~1 GB Q4_0)
+可以使用其他兼容的 GGUF 格式多模态模型：
 
 ### 多模态模型（支持图像）
-- **LLaVA 1.5 7B** (~4 GB Q4_0)
-- **MiniCPM-V 2.6** (~2 GB Q4_0)
-- **Qwen2-VL-2B** (~1.5 GB Q4_0)
+- **LLaVA 系列**
+- **MiniCPM-V 系列**
+- **Qwen-VL 系列**
 
-下载命令相同，只需替换模型仓库名称。
+下载命令相同，只需替换模型仓库名称和文件名。
 
 ## 构建说明
 
 ### APK 大小影响
-- 主模型: +3.12 GB
-- 多模态投影层: +0.92 GB
-- **总增加**: ~4 GB
+- 模型文件会增加 APK 大小（具体取决于所选模型）
+- Qwen3.5-2B-UD-Q2_K_XL 相比 Q4_0 量化模型更小
 
 **建议：**
 1. 使用 Android App Bundle（AAB）而不是 APK
@@ -181,8 +123,7 @@ cp libllama.so ../app/src/main/jniLibs/arm64-v8a/
 # 完整构建（包含模型）
 ./gradlew assembleDebug
 
-# 构建时间会较长（需要打包 4GB 文件）
-# APK 大小会达到 4+ GB
+# 构建时间会较长（需要打包模型文件）
 ```
 
 ### 开发时排除模型
@@ -219,15 +160,15 @@ android {
 val modelManager = ModelManager.getInstance(context)
 
 // 检查主模型
-val mainModelAvailable = modelManager.isModelAvailable("gemma-4-E2B_q4_0-it.gguf")
+val mainModelAvailable = modelManager.isModelAvailable("Qwen3.5-2B-UD-Q2_K_XL.gguf")
 Log.d("Model", "Main model available: $mainModelAvailable")
 
 // 检查多模态投影层
-val mmProjAvailable = modelManager.isModelAvailable("gemma-4-E2B-it-mmproj.gguf")
+val mmProjAvailable = modelManager.isModelAvailable("mmproj-F16.gguf")
 Log.d("Model", "MM projection available: $mmProjAvailable")
 
 // 获取模型信息
-val info = modelManager.getModelInfo("gemma-4-E2B_q4_0-it.gguf")
+val info = modelManager.getModelInfo("Qwen3.5-2B-UD-Q2_K_XL.gguf")
 Log.d("Model", "Model size: ${info?.getReadableSize()}")
 ```
 
@@ -248,22 +189,20 @@ ModelConfig(
 ```
 
 ### 推理速度
-- **首次加载**: 5-10 秒（加载 4GB 模型）
+- **首次加载**: 取决于模型大小和设备性能
 - **图像分析**: 3-8 秒（取决于设备性能）
 - **纯文本**: 1-3 秒
 
 ### 内存需求
-- **模型加载**: ~4 GB
-- **推理时**: +1-2 GB
-- **建议最低内存**: 6 GB RAM
+- **模型加载**: 根据模型大小而定
+- **推理时**: 额外内存开销
+- **建议最低内存**: 4 GB RAM
 
 ## License
 
-Gemma 4 模型遵循 Apache 2.0 许可证。
+Qwen 模型遵循相应的开源许可证。
 
-使用前请确认：
-- https://ai.google.dev/gemma/terms
-- https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf
+使用前请确认模型仓库的许可证条款。
 
 ## Troubleshooting
 
@@ -280,13 +219,13 @@ export https_proxy=http://your-proxy:port
 ### 模型加载失败
 检查日志：
 ```bash
-adb logcat | grep -E "(Gemma|llama|GGUF)"
+adb logcat | grep -E "(Qwen|llama|GGUF)"
 ```
 
 常见问题：
 - 文件路径错误
 - 文件损坏（重新下载）
-- 内存不足（设备 RAM < 6GB）
+- 内存不足（设备 RAM < 4GB）
 - llama.cpp 库未正确集成
 
 ### APK 构建失败
@@ -309,7 +248,7 @@ android {
 相关文档：
 - llama.cpp: https://github.com/ggerganov/llama.cpp
 - GGUF format: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
-- Gemma models: https://ai.google.dev/gemma
+- Qwen models: https://github.com/QwenLM
 
 遇到问题请检查：
 1. logcat 日志

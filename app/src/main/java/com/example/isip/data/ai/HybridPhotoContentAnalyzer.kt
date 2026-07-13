@@ -9,10 +9,10 @@ import kotlinx.coroutines.withTimeout
 /**
  * 混合模式照片内容分析器
  *
- * 智能选择本地Gemma模型或云端Qwen API，具有自动降级和容错能力
+ * 智能选择本地Qwen模型或云端Qwen API，具有自动降级和容错能力
  *
  * 策略：
- * 1. 优先使用本地Gemma模型（隐私优先、离线可用）
+ * 1. 优先使用本地Qwen模型（隐私优先、离线可用）
  * 2. 本地失败时降级到云端Qwen API（网络可用时）
  * 3. 都失败时使用基于规则的回退分析
  */
@@ -50,7 +50,7 @@ class HybridPhotoContentAnalyzer(
             try {
                 return analyzeWithLocal(photo).also {
                     currentAnalyzer = gemmaAnalyzer
-                    Log.d(TAG, "使用本地Gemma模型完成分析")
+                    Log.d(TAG, "使用本地Qwen模型完成分析")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "本地模型分析失败: ${e.message}")
@@ -78,7 +78,7 @@ class HybridPhotoContentAnalyzer(
     }
 
     /**
-     * 使用本地Gemma模型分析
+     * 使用本地Qwen模型分析
      */
     private suspend fun analyzeWithLocal(photo: Photo): PhotoContentAnalysis {
         return withTimeout(localTimeout) {
@@ -202,7 +202,7 @@ class HybridPhotoContentAnalyzer(
             localAvailable = localAvailable,
             cloudAvailable = cloudAvailable,
             currentMode = when (currentAnalyzer) {
-                is GemmaPhotoContentAnalyzer -> "local-gemma"
+                is GemmaPhotoContentAnalyzer -> "local-qwen"
                 is Qwen35PhotoContentAnalyzer -> "cloud-qwen"
                 else -> "fallback-rules"
             }

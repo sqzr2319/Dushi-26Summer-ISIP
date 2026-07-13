@@ -21,6 +21,7 @@ tensorflowLiteSupport = "0.4.4"
 onnxruntime = "1.17.0"
 mediapipe = "0.10.9"
 llamaAndroid = "0.3.0"
+llamaCppJava = "3.1.0"
 litert = "1.4.1"
 
 [libraries]
@@ -57,11 +58,8 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 # mediapipe-tasks-text = { group = "com.google.mediapipe", name = "tasks-text", version.ref = "mediapipe" }
 
 # llama.cpp for GGUF model inference
-# Note: Maven libraries not available. Options:
-# 1. Build llama.cpp from source and include .so files
-# 2. Use llama.cpp via command-line execution (current approach)
-# 3. Wait for official Android library release
-# For now, we use a runtime execution approach
+# Using de.kherud:llama Java wrapper (supports Android)
+llama-cpp-java = { group = "de.kherud", name = "llama", version.ref = "llamaCppJava" }
 litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 
 [plugins]

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
-import com.example.isip.data.ai.Qwen35PhotoContentAnalyzer
+import com.example.isip.data.ai.HybridPhotoContentAnalyzer
 import com.example.isip.data.ai.MobileClipProvider
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
@@ -21,10 +21,11 @@ import java.util.Locale
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
     // 初始化 Repository 和 UseCase
+    // 使用 HybridPhotoContentAnalyzer: 优先本地 Qwen3.5-2B-UD，失败时降级到云端
     private val repository = PhotoRepository.getInstance(application)
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
-        Qwen35PhotoContentAnalyzer(application),
+        HybridPhotoContentAnalyzer(application),  // 混合模式：本地优先
         MobileClipProvider.getOrNull(application)
     )
 

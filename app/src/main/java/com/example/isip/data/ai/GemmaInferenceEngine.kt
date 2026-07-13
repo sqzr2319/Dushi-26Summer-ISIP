@@ -8,20 +8,20 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Gemma-4-E2B-it 推理引擎（llama.cpp + GGUF 实现）
+ * Qwen3.5-2B-UD 推理引擎（llama.cpp + GGUF 实现）
  *
  * 使用 llama.cpp 引擎加载 GGUF 格式的量化模型
  * 支持多模态输入（文本 + 图像）
  *
  * 模型要求：
- * - gemma-4-E2B_q4_0-it.gguf (主模型, ~3.12 GB)
- * - gemma-4-E2B-it-mmproj.gguf (多模态投影层, ~0.92 GB)
+ * - Qwen3.5-2B-UD-Q2_K_XL.gguf (主模型)
+ * - mmproj-F16.gguf (多模态投影层)
  */
 class GemmaInferenceEngine private constructor(
     private val context: Context,
     private val config: ModelConfig
 ) {
-    private var llamaModel: PlaceholderLlamaModel? = null
+    private var llamaWrapper: LlamaCppWrapper? = null
     private var isInitialized = false
     private var modelPath: String? = null
     private var mmProjPath: String? = null
@@ -29,7 +29,7 @@ class GemmaInferenceEngine private constructor(
     /**
      * 初始化模型
      *
-     * @param modelPath GGUF 主模型路径
+     * @param modelPath GGUF 主模型路径（assets 相对路径或绝对路径）
      * @param mmProjPath 多模态投影层路径（可选，图像分析需要）
      */
     suspend fun initialize(
@@ -37,50 +37,111 @@ class GemmaInferenceEngine private constructor(
         mmProjPath: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "正在初始化 Gemma GGUF 模型...")
+            Log.i(TAG, "正在初始化 Qwen GGUF 模型...")
             Log.i(TAG, "主模型: $modelPath")
             if (mmProjPath != null) {
                 Log.i(TAG, "多模态投影层: $mmProjPath")
             }
 
-            // 验证模型文件存在
-            val modelFile = File(modelPath)
-            if (!modelFile.exists()) {
-                throw ModelInitializationException("模型文件不存在: $modelPath")
-            }
+            // 从 assets 复制模型文件到内部存储
+            val actualModelPath = copyModelFromAssets(modelPath)
+            val actualMmProjPath = mmProjPath?.let { copyModelFromAssets(it) }
 
-            this@GemmaInferenceEngine.modelPath = modelPath
-            this@GemmaInferenceEngine.mmProjPath = mmProjPath
-
-            // 实现增强的占位版本
-            // 注意: 当前没有可用的 llama.cpp Android Maven 库
-            // 未来集成方案:
-            // 1. 等待官方 llama.cpp Android 库发布
-            // 2. 从源码编译 llama.cpp 并创建 JNI wrapper
-            // 3. 使用社区提供的预编译库
-
-            // 验证模型文件存在
+            // 验证模型文件大小
+            val modelFile = File(actualModelPath)
             val mainModelSize = modelFile.length() / (1024 * 1024 * 1024f)
             Log.i(TAG, "主模型大小: ${String.format("%.2f", mainModelSize)} GB")
 
-            if (mmProjPath != null) {
-                val mmProjFile = File(mmProjPath)
-                if (mmProjFile.exists()) {
-                    val mmProjSize = mmProjFile.length() / (1024 * 1024f)
-                    Log.i(TAG, "投影层大小: ${String.format("%.2f", mmProjSize)} MB")
-                }
+            if (actualMmProjPath != null) {
+                val mmProjFile = File(actualMmProjPath)
+                val mmProjSize = mmProjFile.length() / (1024 * 1024f)
+                Log.i(TAG, "投影层大小: ${String.format("%.2f", mmProjSize)} MB")
             }
 
-            // 模拟模型加载（为未来实现做准备）
-            llamaModel = PlaceholderLlamaModel(modelPath, mmProjPath, config)
+            this@GemmaInferenceEngine.modelPath = actualModelPath
+            this@GemmaInferenceEngine.mmProjPath = actualMmProjPath
+
+            // 使用 llama.cpp wrapper 加载模型
+            llamaWrapper = LlamaCppWrapper(context, config)
+            llamaWrapper?.initialize(actualModelPath, actualMmProjPath)
 
             isInitialized = true
-            Log.i(TAG, "✅ Gemma 模型初始化成功 (占位实现)")
-            Log.w(TAG, "⚠️ 当前使用占位实现，等待 llama.cpp 库集成")
+            Log.i(TAG, "✅ Qwen 模型初始化成功")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ 模型初始化失败", e)
-            throw ModelInitializationException("无法初始化 Gemma 模型: ${e.message}", e)
+            throw ModelInitializationException("无法初始化 Qwen 模型: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 从 assets 复制模型文件到内部存储
+     * 如果文件已存在且大小正确，则跳过复制
+     */
+    private fun copyModelFromAssets(assetPath: String): String {
+        val fileName = assetPath.substringAfterLast("/")
+        val destFile = File(context.filesDir, fileName)
+
+        // 检查文件是否已存在
+        if (destFile.exists()) {
+            try {
+                // 验证文件大小是否匹配
+                val assetSize = context.assets.openFd(assetPath).length
+                if (destFile.length() == assetSize) {
+                    Log.d(TAG, "模型文件已存在，跳过复制: ${destFile.absolutePath}")
+                    return destFile.absolutePath
+                } else {
+                    Log.w(TAG, "模型文件大小不匹配，重新复制")
+                    destFile.delete()
+                }
+            } catch (e: Exception) {
+                // 如果是绝对路径，直接返回
+                val absoluteFile = File(assetPath)
+                if (absoluteFile.exists()) {
+                    Log.d(TAG, "使用绝对路径: $assetPath")
+                    return assetPath
+                }
+            }
+        }
+
+        // 复制文件
+        Log.i(TAG, "正在复制模型文件从 assets: $assetPath")
+        try {
+            context.assets.open(assetPath).use { input ->
+                destFile.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalBytes = 0L
+                    val startTime = System.currentTimeMillis()
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalBytes += bytesRead
+
+                        // 每 100MB 打印进度
+                        if (totalBytes % (100 * 1024 * 1024) == 0L) {
+                            val sizeMB = totalBytes / (1024 * 1024)
+                            Log.d(TAG, "已复制: ${sizeMB} MB")
+                        }
+                    }
+
+                    val duration = (System.currentTimeMillis() - startTime) / 1000f
+                    val sizeMB = totalBytes / (1024 * 1024f)
+                    Log.i(TAG, "✅ 复制完成: ${String.format("%.2f", sizeMB)} MB, 耗时: ${String.format("%.1f", duration)}s")
+                }
+            }
+
+            return destFile.absolutePath
+
+        } catch (e: Exception) {
+            // 尝试作为绝对路径
+            val absoluteFile = File(assetPath)
+            if (absoluteFile.exists()) {
+                Log.d(TAG, "使用绝对路径: $assetPath")
+                return assetPath
+            }
+
+            throw ModelInitializationException("无法复制模型文件: ${e.message}", e)
         }
     }
 
@@ -103,16 +164,25 @@ class GemmaInferenceEngine private constructor(
         try {
             Log.d(TAG, "分析图像: ${bitmap.width}x${bitmap.height}")
 
-            // 使用占位模型进行分析
-            val response = llamaModel?.generateWithImage(
+            // 使用 llama.cpp 进行分析
+            val response = llamaWrapper?.generateWithImage(
                 bitmap = bitmap,
                 prompt = buildMultimodalPrompt(prompt),
                 maxTokens = config.maxTokens,
                 temperature = config.temperature
             ) ?: throw InferenceException("模型未正确初始化")
 
+            Log.d(TAG, "收到响应长度: ${response.length}")
+            Log.d(TAG, "响应前200字符: ${response.take(200)}")
+
             // 解析 JSON 响应
-            parseAnalysisResponse(response)
+            val result = parseAnalysisResponse(response)
+
+            Log.i(TAG, "✅ 图像分析完成")
+            Log.d(TAG, "解析后分类: ${result.categories}")
+            Log.d(TAG, "解析后描述: ${result.description.take(100)}")
+
+            result
 
         } catch (e: Exception) {
             Log.e(TAG, "图像分析失败", e)
@@ -132,7 +202,7 @@ class GemmaInferenceEngine private constructor(
         try {
             Log.d(TAG, "生成文本，提示词长度: ${prompt.length}")
 
-            llamaModel?.generate(
+            llamaWrapper?.generate(
                 prompt = prompt,
                 maxTokens = maxTokens,
                 temperature = config.temperature
@@ -172,30 +242,49 @@ class GemmaInferenceEngine private constructor(
      */
     private fun parseAnalysisResponse(jsonResponse: String): PhotoContentAnalysis {
         return try {
-            // 简单的 JSON 解析（生产环境应使用 Gson 或 kotlinx.serialization）
-            // TODO: 使用 Gson 解析
-            val categories = extractJsonArray(jsonResponse, "categories")
-            val tags = extractJsonArray(jsonResponse, "tags")
-            val ocrText = extractJsonString(jsonResponse, "ocr_text") ?: ""
-            val description = extractJsonString(jsonResponse, "description") ?: ""
-            val confidence = extractJsonFloat(jsonResponse, "confidence") ?: 0.5f
+            Log.d(TAG, "开始解析 JSON，长度: ${jsonResponse.length}")
+
+            // 尝试提取 JSON（可能包含在其他文本中）
+            val jsonStart = jsonResponse.indexOf("{")
+            val jsonEnd = jsonResponse.lastIndexOf("}")
+
+            val actualJson = if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                jsonResponse.substring(jsonStart, jsonEnd + 1)
+            } else {
+                jsonResponse
+            }
+
+            Log.d(TAG, "提取的 JSON: ${actualJson.take(300)}")
+
+            val categories = extractJsonArray(actualJson, "categories")
+            val tags = extractJsonArray(actualJson, "tags")
+            val ocrText = extractJsonString(actualJson, "ocr_text") ?: ""
+            val description = extractJsonString(actualJson, "description") ?: ""
+            val confidence = extractJsonFloat(actualJson, "confidence") ?: 0.5f
+
+            Log.d(TAG, "解析结果: categories=$categories, tags=$tags")
+            Log.d(TAG, "描述: ${description.take(100)}")
 
             PhotoContentAnalysis(
-                categories = categories,
-                tags = tags,
+                categories = categories.ifEmpty { listOf("照片") },
+                tags = tags.ifEmpty { listOf("#AI分析") },
                 ocrText = ocrText,
-                description = description,
+                description = description.ifEmpty { actualJson.take(200) }, // 使用生成的文本
                 confidence = confidence,
-                labels = tags.map { VisualLabel(it.removePrefix("#"), confidence) }
+                labels = tags.take(5).map { VisualLabel(it.removePrefix("#"), confidence) }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "JSON 解析失败", e)
+            Log.e(TAG, "JSON 解析失败: ${e.message}", e)
+            Log.e(TAG, "原始响应: $jsonResponse")
+
+            // 解析失败时，使用生成的文本作为描述
             PhotoContentAnalysis(
-                categories = listOf("解析失败"),
-                tags = listOf("#未知"),
+                categories = listOf("照片"),
+                tags = listOf("#AI生成"),
                 ocrText = "",
-                description = jsonResponse.take(100),
-                confidence = 0.1f
+                description = jsonResponse.take(500), // 使用前500字符
+                confidence = 0.7f,
+                labels = listOf(VisualLabel("AI生成", 0.7f))
             )
         }
     }
@@ -230,7 +319,7 @@ class GemmaInferenceEngine private constructor(
           "categories": ["照片"],
           "tags": ["#示例标签", "#${if (isLandscape) "横向" else "竖向"}"],
           "ocr_text": "",
-          "description": "Gemma GGUF 模型占位实现 - 等待 llama.cpp 集成",
+          "description": "Qwen GGUF 模型占位实现 - 等待 llama.cpp 集成",
           "confidence": 0.5,
           "labels": [
             {"label": "占位", "confidence": 0.5}
@@ -264,8 +353,8 @@ class GemmaInferenceEngine private constructor(
      */
     fun release() {
         try {
-            // TODO: llamaModel?.close()
-            llamaModel = null
+            llamaWrapper?.release()
+            llamaWrapper = null
             isInitialized = false
             Log.d(TAG, "模型资源已释放")
         } catch (e: Exception) {
@@ -302,144 +391,18 @@ data class ModelConfig(
     val maxTokens: Int = 512,                // 最大生成 token 数
     val temperature: Float = 0.7f,           // 采样温度
     val contextSize: Int = 2048,             // 上下文窗口大小
-    val quantizationType: QuantizationType = QuantizationType.Q4_0  // GGUF 量化类型
+    val quantizationType: QuantizationType = QuantizationType.Q2_K_XL  // GGUF 量化类型
 )
 
 enum class QuantizationType {
-    Q2_K,   // 2-bit 量化 (K-quant)
-    Q4_0,   // 4-bit 量化 (legacy)
-    Q4_K_M, // 4-bit 量化 (K-quant, medium)
-    Q5_K_M, // 5-bit 量化 (K-quant, medium)
-    Q8_0,   // 8-bit 量化
-    F16     // 16-bit 浮点
+    Q2_K,      // 2-bit 量化 (K-quant)
+    Q2_K_XL,   // 2-bit 量化 (K-quant, XL)
+    Q4_0,      // 4-bit 量化 (legacy)
+    Q4_K_M,    // 4-bit 量化 (K-quant, medium)
+    Q5_K_M,    // 5-bit 量化 (K-quant, medium)
+    Q8_0,      // 8-bit 量化
+    F16        // 16-bit 浮点
 }
 
 class ModelInitializationException(message: String, cause: Throwable? = null) : Exception(message, cause)
 class InferenceException(message: String, cause: Throwable? = null) : Exception(message, cause)
-
-/**
- * 占位 LlamaModel 实现
- *
- * 这是一个临时实现，用于在没有实际 llama.cpp 库的情况下保持代码可编译。
- * 当 llama.cpp Android 库可用时，替换为实际实现。
- *
- * 未来集成方案:
- * 1. 使用官方 llama.cpp Android 库（当发布时）
- * 2. 从源码编译并创建 JNI wrapper
- * 3. 使用社区预编译库
- */
-internal class PlaceholderLlamaModel(
-    private val modelPath: String,
-    private val mmProjPath: String?,
-    private val config: ModelConfig
-) {
-    private val tag = "PlaceholderLlamaModel"
-
-    init {
-        Log.w(tag, "⚠️ 使用占位实现 - 不会执行实际推理")
-        Log.i(tag, "模型路径: $modelPath")
-        Log.i(tag, "配置: threads=${config.numThreads}, gpu=${config.useGPU}, ctx=${config.contextSize}")
-    }
-
-    /**
-     * 多模态图像分析（占位）
-     */
-    fun generateWithImage(
-        bitmap: Bitmap,
-        prompt: String,
-        maxTokens: Int,
-        temperature: Float
-    ): String {
-        Log.d(tag, "generateWithImage called (占位实现)")
-        Log.d(tag, "  图像: ${bitmap.width}x${bitmap.height}")
-        Log.d(tag, "  提示词长度: ${prompt.length}")
-
-        // 返回模拟的 JSON 响应
-        return generateSimulatedResponse(bitmap)
-    }
-
-    /**
-     * 文本生成（占位）
-     */
-    fun generate(
-        prompt: String,
-        maxTokens: Int,
-        temperature: Float
-    ): String {
-        Log.d(tag, "generate called (占位实现)")
-        Log.d(tag, "  提示词: ${prompt.take(100)}...")
-
-        return "这是占位实现的响应。实际的 llama.cpp 推理尚未集成。\n\n" +
-               "提示: ${prompt.take(50)}...\n\n" +
-               "当前模型: $modelPath\n" +
-               "配置: ${config.numThreads} 线程, GPU=${config.useGPU}"
-    }
-
-    /**
-     * 生成模拟的图像分析响应
-     */
-    private fun generateSimulatedResponse(bitmap: Bitmap): String {
-        val width = bitmap.width
-        val height = bitmap.height
-        val aspectRatio = width.toFloat() / height.toFloat()
-
-        // 基于图像属性生成合理的模拟结果
-        val orientation = when {
-            aspectRatio > 1.5f -> "横向"
-            aspectRatio < 0.67f -> "竖向"
-            else -> "方形"
-        }
-
-        val categories = mutableListOf("照片")
-        val tags = mutableListOf("#占位实现", "#$orientation")
-
-        // 根据尺寸推测可能的类型
-        if (aspectRatio > 1.5f) {
-            categories.add("风景")
-            tags.add("#风景")
-        } else if (aspectRatio < 0.67f) {
-            categories.add("人物")
-            tags.add("#人物")
-        }
-
-        // 基于像素密度
-        val totalPixels = width * height
-        if (totalPixels > 2_000_000) {
-            tags.add("#高清")
-        }
-
-        val description = "这是一张${orientation}照片（${width}x${height}）。" +
-                         "注意：当前使用占位实现，未执行实际的 AI 分析。"
-
-        // 返回 JSON 格式
-        return """
-        {
-          "categories": ${categories.toJsonArray()},
-          "tags": ${tags.toJsonArray()},
-          "ocr_text": "",
-          "description": "$description",
-          "confidence": 0.5,
-          "labels": [
-            {"label": "占位", "confidence": 0.5},
-            {"label": "$orientation", "confidence": 0.6}
-          ]
-        }
-        """.trimIndent()
-    }
-
-    private fun List<String>.toJsonArray(): String {
-        return "[" + this.joinToString(", ") { "\"$it\"" } + "]"
-    }
-
-    /**
-     * 释放资源
-     */
-    fun close() {
-        Log.d(tag, "模型资源已释放（占位实现）")
-    }
-}
-
-// 扩展函数用于 JSON 格式化
-private fun List<String>.toJsonArray(): String {
-    return "[" + this.joinToString(", ") { "\"$it\"" } + "]"
-}

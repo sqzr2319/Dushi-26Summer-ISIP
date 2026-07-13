@@ -13,10 +13,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 测试 Gemma 模型集成的示例代码
+ * 测试 Qwen 模型集成的示例代码
  *
  * 用法：
- * 1. 在 MainActivity 中调用 testGemmaIntegration()
+ * 1. 在 MainActivity 中调用 testModelLoading()
  * 2. 查看 logcat 输出验证模型加载和推理
  */
 class GemmaIntegrationTest {
@@ -30,12 +30,12 @@ class GemmaIntegrationTest {
         fun testModelLoading(activity: ComponentActivity) {
             activity.lifecycleScope.launch {
                 try {
-                    Log.i(TAG, "=== 开始测试 Gemma 模型集成 ===")
+                    Log.i(TAG, "=== 开始测试 Qwen 模型集成 ===")
 
                     // 1. 检查模型文件
                     Log.i(TAG, "1. 检查模型文件...")
-                    val mainModelPath = "models/gemma-4-E2B_q4_0-it.gguf"
-                    val mmProjPath = "models/gemma-4-E2B-it-mmproj.gguf"
+                    val mainModelPath = "models/Qwen3.5-2B-UD-Q2_K_XL.gguf"
+                    val mmProjPath = "models/mmproj-F16.gguf"
 
                     val mainModelFile = File(activity.filesDir, mainModelPath)
                     val mmProjFile = File(activity.filesDir, mmProjPath)
@@ -55,7 +55,7 @@ class GemmaIntegrationTest {
                             maxTokens = 256,
                             temperature = 0.3f,
                             contextSize = 2048,
-                            quantizationType = QuantizationType.Q4_0
+                            quantizationType = QuantizationType.Q2_K_XL
                         )
                     )
 
@@ -90,7 +90,7 @@ class GemmaIntegrationTest {
 
                     testBitmap.recycle()
 
-                    Log.i(TAG, "=== Gemma 模型集成测试完成 ===")
+                    Log.i(TAG, "=== Qwen 模型集成测试完成 ===")
                     Log.i(TAG, "✅ 所有测试通过")
 
                 } catch (e: Exception) {

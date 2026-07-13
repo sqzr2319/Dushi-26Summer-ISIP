@@ -9,7 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Gemma-4-E2B-it PhotoContentAnalyzer实现
+ * Qwen3.5-2B-UD PhotoContentAnalyzer实现
  *
  * 使用 llama.cpp + GGUF 格式的量化模型进行端侧图像分析，无需网络连接。
  */
@@ -26,14 +26,14 @@ class GemmaPhotoContentAnalyzer(
             maxTokens = 256,
             temperature = 0.3f,
             contextSize = 2048,
-            quantizationType = QuantizationType.Q4_0
+            quantizationType = QuantizationType.Q2_K_XL
         ))
     }
 
     private var isModelLoaded = false
 
-    override val modelName: String = "gemma-4-e2b-it"
-    override val modelVersion: String = "q4_0-gguf"
+    override val modelName: String = "qwen3.5-2b-ud"
+    override val modelVersion: String = "q2_k_xl-gguf"
 
     /**
      * 分析单张照片
@@ -57,7 +57,7 @@ class GemmaPhotoContentAnalyzer(
 
             result
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Gemma分析失败，返回基础结果", e)
+            android.util.Log.e(TAG, "Qwen模型分析失败，返回基础结果", e)
             // 回退到基础分析
             createFallbackAnalysis(photo)
         }
@@ -72,10 +72,10 @@ class GemmaPhotoContentAnalyzer(
                 // 初始化 GGUF 模型（主模型 + 多模态投影层）
                 inferenceEngine.initialize(modelPath, mmProjPath)
                 isModelLoaded = true
-                android.util.Log.d(TAG, "Gemma GGUF 模型加载成功")
+                android.util.Log.d(TAG, "Qwen GGUF 模型加载成功")
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Gemma GGUF 模型加载失败", e)
-                throw ModelInitializationException("无法加载Gemma模型: ${e.message}", e)
+                android.util.Log.e(TAG, "Qwen GGUF 模型加载失败", e)
+                throw ModelInitializationException("无法加载Qwen模型: ${e.message}", e)
             }
         }
     }
@@ -188,7 +188,7 @@ class GemmaPhotoContentAnalyzer(
 
     companion object {
         private const val TAG = "GemmaPhotoContentAnalyzer"
-        private const val DEFAULT_MODEL_PATH = "models/gemma-4-E2B_q4_0-it.gguf"
-        private const val DEFAULT_MMPROJ_PATH = "models/gemma-4-E2B-it-mmproj.gguf"
+        private const val DEFAULT_MODEL_PATH = "models/Qwen3.5-2B-UD-Q2_K_XL.gguf"
+        private const val DEFAULT_MMPROJ_PATH = "models/mmproj-F16.gguf"
     }
 }
