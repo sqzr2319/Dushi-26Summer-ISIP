@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.provider.MediaStore
+import android.net.Uri
 import android.util.Base64
 import com.example.isip.BuildConfig
 import com.example.isip.data.model.Photo
@@ -15,6 +16,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.File
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -58,7 +60,7 @@ class Qwen35PhotoContentAnalyzer(
 
     override suspend fun analyze(photo: Photo): PhotoContentAnalysis = withContext(Dispatchers.IO) {
         val payload = JsonObject().apply {
-            addProperty("image_base64", encodePhoto(photo.id))
+            addProperty("image_base64", encodePhoto(photo))
             addProperty("mime_type", "image/jpeg")
         }
 
@@ -89,22 +91,26 @@ class Qwen35PhotoContentAnalyzer(
         }
     }
 
-    private fun encodePhoto(photoId: String): String {
-        val uri = ContentUris.withAppendedId(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            photoId.toLong()
-        )
+    private fun encodePhoto(photo: Photo): String {
+        val uri = resolvePhotoUri(photo)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        appContext.contentResolver.openInputStream(uri)?.use { stream ->
+        val boundsStream = appContext.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("无法打开照片 ${photo.id}，请检查照片访问权限")
+        boundsStream.use { stream ->
+            // inJustDecodeBounds=true 时 decodeStream 按设计返回 null；这里只读取宽高，
+            // 不能用其返回值判断图片是否成功打开。
             BitmapFactory.decodeStream(stream, null, bounds)
-        } ?: throw IllegalStateException("Unable to open photo $photoId")
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IllegalStateException("无法读取照片 ${photo.id} 的尺寸")
+        }
 
         val decodeOptions = BitmapFactory.Options().apply {
             inSampleSize = calculateSampleSize(bounds.outWidth, bounds.outHeight)
         }
         val decoded = appContext.contentResolver.openInputStream(uri)?.use { stream ->
             BitmapFactory.decodeStream(stream, null, decodeOptions)
-        } ?: throw IllegalStateException("Unable to decode photo $photoId")
+        } ?: throw IllegalStateException("无法解码照片 ${photo.id}")
 
         val longestSide = max(decoded.width, decoded.height)
         val scaled = if (longestSide > MAX_IMAGE_SIDE) {
@@ -128,6 +134,17 @@ class Qwen35PhotoContentAnalyzer(
             if (scaled !== decoded) scaled.recycle()
             decoded.recycle()
         }
+    }
+
+    private fun resolvePhotoUri(photo: Photo): Uri {
+        val stored = photo.filePath.trim().takeIf(String::isNotEmpty)?.let(Uri::parse)
+        if (stored?.scheme == "content") return stored
+        if (stored?.scheme == "file") return stored
+        if (stored != null && stored.scheme == null) return Uri.fromFile(File(photo.filePath))
+        return ContentUris.withAppendedId(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            photo.id.toLongOrNull() ?: throw IllegalArgumentException("无效照片 ID: ${photo.id}")
+        )
     }
 
     private fun calculateSampleSize(width: Int, height: Int): Int {
@@ -168,7 +185,8 @@ class Qwen35PhotoContentAnalyzer(
         const val MAX_IMAGE_SIDE = 1280
         const val JPEG_QUALITY = 85
         const val CONNECT_TIMEOUT_MS = 15_000
-        const val READ_TIMEOUT_MS = 300_000
+        // CPU 首次加载 Qwen3.5-4B 可能超过五分钟。
+        const val READ_TIMEOUT_MS = 900_000
         const val DEFAULT_CONFIDENCE = 0.7f
         const val MAX_RETURNED_TERMS = 8
     }

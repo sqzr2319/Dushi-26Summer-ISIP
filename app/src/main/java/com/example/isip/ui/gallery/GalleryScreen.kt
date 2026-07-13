@@ -1,5 +1,10 @@
 package com.example.isip.ui.gallery
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -11,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -27,6 +34,32 @@ fun GalleryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val requestedPermissions = remember {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+    fun hasPhotoPermission(): Boolean = requestedPermissions.any { permission ->
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        viewModel.onEvent(GalleryUiEvent.PermissionResult(results.values.any { it }))
+    }
+    val requestPhotoPermission = { permissionLauncher.launch(requestedPermissions) }
+
+    LaunchedEffect(Unit) {
+        viewModel.onEvent(GalleryUiEvent.PermissionResult(hasPhotoPermission()))
+    }
     val filteredPhotos = remember(uiState.photos, uiState.activeCategory) {
         viewModel.getFilteredPhotos()
     }
@@ -38,7 +71,9 @@ fun GalleryScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshPhotos()
+                val granted = hasPhotoPermission()
+                viewModel.onEvent(GalleryUiEvent.PermissionResult(granted))
+                if (granted) viewModel.refreshPhotos()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -83,7 +118,7 @@ fun GalleryScreen(
             when {
                 !uiState.permissionGranted -> {
                     PermissionRequestContent(
-                        onRequestPermission = { viewModel.onEvent(GalleryUiEvent.RequestPermission) }
+                        onRequestPermission = requestPhotoPermission
                     )
                 }
 
@@ -94,7 +129,7 @@ fun GalleryScreen(
                 uiState.errorMessage != null -> {
                     ErrorState(
                         message = uiState.errorMessage ?: "未知错误",
-                        onRetry = { viewModel.onEvent(GalleryUiEvent.RequestPermission) }
+                        onRetry = requestPhotoPermission
                     )
                 }
 

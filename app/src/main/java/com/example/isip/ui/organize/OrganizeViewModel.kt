@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.domain.usecase.OrganizePhotosUseCase
+import com.example.isip.data.ai.MobileClipProvider
+import com.example.isip.domain.skill.GenerateStrategySkill
 import com.example.isip.ui.model.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -35,7 +37,10 @@ class OrganizeViewModel(application: Application) : AndroidViewModel(application
 
     // 初始化 Repository 和 UseCase
     private val repository = PhotoRepository.getInstance(application)
-    private val organizeUseCase = OrganizePhotosUseCase(repository)
+    private val organizeUseCase = OrganizePhotosUseCase(
+        repository,
+        GenerateStrategySkill(MobileClipProvider.getOrNull(application))
+    )
 
     private val _uiState = MutableStateFlow(OrganizeUiState())
     val uiState: StateFlow<OrganizeUiState> = _uiState.asStateFlow()

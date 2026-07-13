@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.domain.usecase.SearchPhotosUseCase
+import com.example.isip.data.ai.MobileClipProvider
+import com.example.isip.domain.skill.SearchPhotosSkill
 import com.example.isip.ui.model.SearchResultUiModel
 import com.example.isip.ui.model.PhotoUiModel
 import java.text.SimpleDateFormat
@@ -36,7 +38,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     // 初始化 Repository 和 UseCase
     private val repository = PhotoRepository.getInstance(application)
-    private val searchUseCase = SearchPhotosUseCase(repository)
+    private val searchUseCase = SearchPhotosUseCase(
+        repository,
+        SearchPhotosSkill(clipSearchEngine = MobileClipProvider.getOrNull(application))
+    )
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()

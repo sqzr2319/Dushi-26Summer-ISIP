@@ -4,16 +4,19 @@ import com.example.isip.data.PhotoRepository
 import com.example.isip.data.ai.PhotoContentAnalysis
 import com.example.isip.data.ai.PhotoContentAnalyzer
 import com.example.isip.data.ai.VisualLabel
+import com.example.isip.data.ai.MobileClipEngine
 import com.example.isip.data.model.ImageAnalysisResult
 import com.example.isip.data.model.Photo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import com.example.isip.domain.skill.AnalyzeImageSkill
 import java.util.Calendar
 
 /** Generates a searchable local analysis record for each photo. */
 class AnalyzePhotosUseCase(
     private val photoRepository: PhotoRepository,
-    private val contentAnalyzer: PhotoContentAnalyzer
+    private val contentAnalyzer: PhotoContentAnalyzer,
+    private val clipEngine: MobileClipEngine? = null
 ) {
 
     /**
@@ -63,7 +66,8 @@ class AnalyzePhotosUseCase(
         val existing = photoRepository.getAnalysisResult(photoId)
         if (!force && isCurrentModelResult(existing)) return existing
 
-        return analyzePhoto(photo).also { photoRepository.saveAnalysisResult(it) }
+        return analyzePhoto(photo, requireDetail = force)
+            .also { photoRepository.saveAnalysisResult(it) }
     }
 
     /** Analyzes photos that do not yet use the active visual model. */
@@ -80,8 +84,12 @@ class AnalyzePhotosUseCase(
         return pending.size
     }
 
-    private suspend fun analyzePhoto(photo: Photo): ImageAnalysisResult =
-        buildModelResult(photo, contentAnalyzer.analyze(photo))
+    private suspend fun analyzePhoto(
+        photo: Photo,
+        requireDetail: Boolean = false
+    ): ImageAnalysisResult = AnalyzeImageSkill(clipEngine, contentAnalyzer).execute(
+        AnalyzeImageSkill.Input(photo = photo, requireDetail = requireDetail)
+    )
 
     private fun buildModelResult(
         photo: Photo,
@@ -187,9 +195,11 @@ class AnalyzePhotosUseCase(
         }
     }
 
-    private fun isCurrentModelResult(result: ImageAnalysisResult?): Boolean =
-        result?.modelName == contentAnalyzer.modelName &&
-            result.modelVersion == contentAnalyzer.modelVersion
+    private fun isCurrentModelResult(result: ImageAnalysisResult?): Boolean {
+        val model = result?.modelName ?: return false
+        return if (clipEngine != null) MobileClipEngine.MODEL_NAME in model
+        else model == contentAnalyzer.modelName && result.modelVersion == contentAnalyzer.modelVersion
+    }
 
     private fun isScreenshot(fileName: String): Boolean {
         val normalized = fileName.lowercase()
