@@ -75,6 +75,14 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // llama.cpp for GGUF model inference
+    // Maven libraries not available - using alternative approach:
+    // We'll implement a simplified version using file-based inference or
+    // prepare for future JNI integration when llama.cpp Android library becomes available
+
+    // For now, the code uses a placeholder implementation that can be replaced
+    // when a proper llama.cpp Android library is released
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
