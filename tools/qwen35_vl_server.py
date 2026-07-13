@@ -27,9 +27,9 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 
 MODEL_DIR = os.environ.get("QWEN35_MODEL_DIR", r"D:\models\Qwen3.5-4B")
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
-MAX_NEW_TOKENS = 240
+MAX_NEW_TOKENS = 1024
 
-PROMPT = """分析这张图片，并且只输出一个合法 JSON 对象，不要 Markdown、不要解释。
+PROMPT = """不要展示思考过程。立即分析这张图片，并且只输出一个合法 JSON 对象，不要 Markdown、不要解释、不要在 JSON 前后添加文字。
 JSON 格式：
 {
   "categories": ["最多三个中文分类"],
@@ -64,14 +64,31 @@ def load_model() -> tuple[Any, Any, torch.device]:
     if not os.path.exists(MODEL_DIR):
         raise RuntimeError(f"Model directory does not exist: {MODEL_DIR}")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dtype = torch.bfloat16
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda:0" if use_cuda else "cpu")
+    dtype = torch.bfloat16 if use_cuda else torch.float32
     processor = AutoProcessor.from_pretrained(MODEL_DIR)
-    model = AutoModelForImageTextToText.from_pretrained(
-        MODEL_DIR,
-        torch_dtype=dtype,
-        low_cpu_mem_usage=True,
-    ).to(device)
+    model_kwargs: dict[str, Any] = {
+        "dtype": dtype,
+        "low_cpu_mem_usage": True,
+    }
+    if use_cuda:
+        # Qwen3.5-4B 的 BF16 权重约 8.7GB，无法完整放入 8GB RTX 4060。
+        # NF4 双重量化可把权重降到约 3GB，并为视觉编码和生成缓存保留显存。
+        from transformers import BitsAndBytesConfig
+
+        model_kwargs.update({
+            "device_map": "auto",
+            "quantization_config": BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            ),
+        })
+    model = AutoModelForImageTextToText.from_pretrained(MODEL_DIR, **model_kwargs)
+    if not use_cuda:
+        model = model.to(device)
     model.eval()
     return model, processor, device
 
@@ -82,11 +99,14 @@ def health() -> dict[str, Any]:
         "model_path": MODEL_DIR,
         "model_loaded": load_model.cache_info().currsize == 1,
         "cuda": torch.cuda.is_available(),
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "inference_mode": "cuda-nf4" if torch.cuda.is_available() else "cpu-fp32",
     }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    print("收到 Android 图片分析请求，正在加载/运行 Qwen3.5…", flush=True)
     try:
         image_bytes = base64.b64decode(request.image_base64, validate=True)
     except ValueError as error:
@@ -115,6 +135,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             inputs = processor.apply_chat_template(
                 messages,
                 add_generation_prompt=True,
+                enable_thinking=False,
                 tokenize=True,
                 return_dict=True,
                 return_tensors="pt",
@@ -137,10 +158,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 
 
 def normalize_response(raw_text: str) -> dict[str, Any]:
-    match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
-    if match is None:
-        raise ValueError(f"Model did not return JSON: {raw_text[:240]}")
-    payload = json.loads(match.group(0))
+    payload = extract_json_object(raw_text)
 
     def strings(name: str, limit: int) -> list[str]:
         value = payload.get(name, [])
@@ -165,6 +183,47 @@ def normalize_response(raw_text: str) -> dict[str, Any]:
         "ocr_text": str(payload.get("ocr_text", "")).strip()[:1200],
         "confidence": min(max(confidence, 0.0), 1.0),
     }
+
+
+def extract_json_object(raw_text: str) -> dict[str, Any]:
+    """Accept bare JSON, fenced JSON and JSON encoded as a string.
+
+    Some Transformers/Qwen combinations preserve the surrounding markdown or
+    escape the decoded answer. The Android contract remains a plain object, so
+    normalize those presentation differences at the service boundary.
+    """
+    candidates = [raw_text.strip()]
+    try:
+        decoded = json.loads(candidates[0])
+        if isinstance(decoded, dict):
+            return decoded
+        if isinstance(decoded, str):
+            candidates.append(decoded.strip())
+    except json.JSONDecodeError:
+        pass
+
+    for candidate in list(candidates):
+        unfenced = re.sub(r"^```(?:json)?\s*|\s*```$", "", candidate, flags=re.IGNORECASE)
+        candidates.append(unfenced.strip())
+        if r'\"' in candidate or r'\n' in candidate:
+            candidates.append(
+                candidate.replace(r'\"', '"').replace(r'\n', '\n')
+                .replace(r'\r', '\r').replace(r'\t', '\t')
+            )
+
+    for candidate in candidates:
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start < 0 or end <= start:
+            continue
+        try:
+            payload = json.loads(candidate[start:end + 1])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+
+    raise ValueError(f"Model did not return complete JSON: {raw_text[:400]!r}")
 
 
 if __name__ == "__main__":

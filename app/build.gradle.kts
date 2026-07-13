@@ -69,6 +69,8 @@ dependencies {
 
     // Gson for JSON parsing
     implementation(libs.gson)
+    // MobileCLIP image/text encoders run fully on-device through LiteRT.
+    implementation(libs.litert)
 
     // Room database
     implementation(libs.androidx.room.runtime)

@@ -258,7 +258,7 @@ class PhotoRepository(
             objectsJson = gson.toJson(emptyList<String>()),
             scene = null,
             ocrText = ocrText,
-            embeddingPath = null,
+            embeddingPath = embeddingPath,
             modelName = modelName,
             modelVersion = modelVersion,
             processedAt = analyzedAt
@@ -277,7 +277,8 @@ class PhotoRepository(
             confidence = 0.7f,
             analyzedAt = processedAt ?: System.currentTimeMillis(),
             modelName = modelName,
-            modelVersion = modelVersion
+            modelVersion = modelVersion,
+            embeddingPath = embeddingPath
         )
     }
 

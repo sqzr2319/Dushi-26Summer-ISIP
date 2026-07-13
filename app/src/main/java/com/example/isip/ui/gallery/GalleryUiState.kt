@@ -14,7 +14,7 @@ data class GalleryUiState(
 )
 
 sealed interface GalleryUiEvent {
-    data object RequestPermission : GalleryUiEvent
+    data class PermissionResult(val granted: Boolean) : GalleryUiEvent
     data object StartAnalysis : GalleryUiEvent
     data object PauseAnalysis : GalleryUiEvent
     data object ResumeAnalysis : GalleryUiEvent

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.data.ai.Qwen35PhotoContentAnalyzer
+import com.example.isip.data.ai.MobileClipProvider
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import java.text.SimpleDateFormat
@@ -21,6 +22,7 @@ data class PhotoDetailUiState(
     val ocrText: String? = null,
     val description: String? = null,
     val isLoading: Boolean = false,
+    val isAnalyzing: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -37,7 +39,8 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
     private val repository = PhotoRepository.getInstance(application)
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
-        Qwen35PhotoContentAnalyzer(application)
+        Qwen35PhotoContentAnalyzer(application),
+        MobileClipProvider.getOrNull(application)
     )
 
     private val _uiState = MutableStateFlow(PhotoDetailUiState())
@@ -105,8 +108,10 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun startAnalysis(force: Boolean = false) {
         val photoId = _uiState.value.photo?.id ?: return
+        if (_uiState.value.isAnalyzing) return
 
         viewModelScope.launch {
+            _uiState.update { it.copy(isAnalyzing = true, errorMessage = null) }
             try {
                 // 触发单张照片分析
                 val result = analyzeUseCase.analyzeSinglePhoto(photoId, force)
@@ -119,6 +124,8 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
                 _uiState.update {
                     it.copy(errorMessage = "分析失败: ${e.message}")
                 }
+            } finally {
+                _uiState.update { it.copy(isAnalyzing = false) }
             }
         }
     }
