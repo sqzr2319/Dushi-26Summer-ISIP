@@ -197,16 +197,18 @@ fun PhotoDetailScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
                                 OutlinedButton(
                                     onClick = { viewModel.onEvent(PhotoDetailUiEvent.Reanalyze) },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !uiState.isAnalyzing
                                 ) {
-                                    Text("重新使用 AI 模型分析")
+                                    Text(if (uiState.isAnalyzing) "Qwen3.5 正在分析…" else "重新使用 AI 模型分析")
                                 }
                             } else {
                                 Button(
                                     onClick = { viewModel.onEvent(PhotoDetailUiEvent.StartAnalysis) },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !uiState.isAnalyzing
                                 ) {
-                                    Text("开始分析此照片")
+                                    Text(if (uiState.isAnalyzing) "正在分析…" else "开始分析此照片")
                                 }
                             }
                         }

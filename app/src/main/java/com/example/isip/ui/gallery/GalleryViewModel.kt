@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.data.ai.Qwen35PhotoContentAnalyzer
+import com.example.isip.data.ai.MobileClipProvider
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.AnalysisProgressUi
@@ -23,7 +24,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val repository = PhotoRepository.getInstance(application)
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
-        Qwen35PhotoContentAnalyzer(application)
+        Qwen35PhotoContentAnalyzer(application),
+        MobileClipProvider.getOrNull(application)
     )
 
     private val _uiState = MutableStateFlow(GalleryUiState())
@@ -33,7 +35,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun onEvent(event: GalleryUiEvent) {
         when (event) {
-            is GalleryUiEvent.RequestPermission -> requestPermission()
+            is GalleryUiEvent.PermissionResult -> updatePermission(event.granted)
             is GalleryUiEvent.StartAnalysis -> startAnalysis()
             is GalleryUiEvent.PauseAnalysis -> pauseAnalysis()
             is GalleryUiEvent.ResumeAnalysis -> resumeAnalysis()
@@ -45,12 +47,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun requestPermission() {
-        // 权限已授予后加载照片
-        viewModelScope.launch {
-            _uiState.update { it.copy(permissionGranted = true) }
-            loadPhotos()
+    private fun updatePermission(granted: Boolean) {
+        val changed = _uiState.value.permissionGranted != granted
+        _uiState.update {
+            it.copy(
+                permissionGranted = granted,
+                errorMessage = if (granted) null else it.errorMessage
+            )
         }
+        if (granted && (changed || _uiState.value.photos.isEmpty())) loadPhotos()
     }
 
     private fun loadPhotos() {

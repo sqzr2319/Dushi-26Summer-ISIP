@@ -4,13 +4,15 @@ import com.example.isip.data.PhotoRepository
 import com.example.isip.data.model.*
 import com.example.isip.utils.ImageUtils
 import java.util.Calendar
+import com.example.isip.domain.skill.GenerateStrategySkill
 
 /**
  * 整理照片用例
  * 生成相册整理方案
  */
 class OrganizePhotosUseCase(
-    private val photoRepository: PhotoRepository
+    private val photoRepository: PhotoRepository,
+    private val strategySkill: GenerateStrategySkill = GenerateStrategySkill()
 ) {
 
     /**
@@ -24,23 +26,13 @@ class OrganizePhotosUseCase(
             photoRepository.getAllPhotos()
         }
 
-        // 生成事件相册
-        val albums = generateEventAlbums(photos)
-
-        // 检测重复照片
-        val duplicates = detectDuplicates(photos)
-
-        // 检测隐私风险
-        val privacyRisks = detectPrivacyRisks(photos)
-
-        // 生成建议
-        val suggestions = generateSuggestions(albums, duplicates, privacyRisks)
-
-        return OrganizationPlan(
-            albums = albums,
-            duplicates = duplicates,
-            privacyRisks = privacyRisks,
-            suggestions = suggestions
+        val selectedIds = photos.map(Photo::id).toSet()
+        val analyses = photoRepository.getAllAnalysisResults().filter { it.photoId in selectedIds }
+        return strategySkill.execute(
+            GenerateStrategySkill.Input(
+                analyses = analyses,
+                photos = photos
+            )
         )
     }
 

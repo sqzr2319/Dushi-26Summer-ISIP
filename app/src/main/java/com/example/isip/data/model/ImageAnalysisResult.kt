@@ -15,7 +15,9 @@ data class ImageAnalysisResult(
     val confidence: Float,               // 综合置信度 0.0 ~ 1.0
     val analyzedAt: Long = System.currentTimeMillis(), // 分析时间
     val modelName: String? = null,
-    val modelVersion: String? = null
+    val modelVersion: String? = null,
+    /** 本地 CLIP embedding 文件；不把大向量写入 Room。 */
+    val embeddingPath: String? = null
 ) {
     // 辅助方法：判断是否有有效内容
     fun hasContent(): Boolean = categories.isNotEmpty() || ocrText.isNotBlank() || tags.isNotEmpty()

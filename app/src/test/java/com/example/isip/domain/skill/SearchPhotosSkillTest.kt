@@ -115,6 +115,7 @@ class SearchPhotosSkillTest {
         SearchPhotosSkill().execute(
             SearchPhotosSkill.Input(query = "   ", analyses = listOf(analysis("photo")))
         )
+        Unit
     }
 
     private fun analysis(
