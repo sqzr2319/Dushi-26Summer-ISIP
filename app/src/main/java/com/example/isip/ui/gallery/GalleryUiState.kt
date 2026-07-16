@@ -2,6 +2,8 @@ package com.example.isip.ui.gallery
 
 import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.AnalysisProgressUi
+import com.example.isip.domain.skill.DeletePhotoSkill
+import com.example.isip.domain.skill.SummarizeSelectionSkill
 
 data class GalleryUiState(
     val permissionGranted: Boolean = false,
@@ -10,7 +12,9 @@ data class GalleryUiState(
     val activeCategory: String = "全部",
     val analysisProgress: AnalysisProgressUi? = null,
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val pendingDeleteRequest: DeletePhotoSkill.DeleteRequest? = null,
+    val selectionSummary: SummarizeSelectionSkill.SelectionSummary? = null
 )
 
 sealed interface GalleryUiEvent {
@@ -23,4 +27,11 @@ sealed interface GalleryUiEvent {
     data class OpenPhoto(val photoId: String) : GalleryUiEvent
     data object ClearSelection : GalleryUiEvent
     data object DeleteSelected : GalleryUiEvent
+    data object ShowSelectionSummary : GalleryUiEvent
+    data object DismissSelectionSummary : GalleryUiEvent
+    data class DeleteConfirmationResult(
+        val requestId: String,
+        val approved: Boolean,
+        val systemDeleteCompleted: Boolean
+    ) : GalleryUiEvent
 }
