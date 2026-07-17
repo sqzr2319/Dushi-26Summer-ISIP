@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import android.net.Uri
 import com.example.isip.data.model.Photo
 import com.example.isip.domain.skill.AnalyzeImageSkill
+import com.example.isip.domain.skill.FindSimilarPhotosSkill
 import com.example.isip.domain.skill.GenerateStrategySkill
 import com.example.isip.domain.skill.SearchPhotosSkill
 import com.google.gson.Gson
@@ -43,6 +44,7 @@ class MobileClipEngine private constructor(
 ) : AnalyzeImageSkill.ClipImageAnalyzer,
     SearchPhotosSkill.ClipSearchEngine,
     GenerateStrategySkill.ClipSimilarityEngine,
+    FindSimilarPhotosSkill.SimilarityEngine,
     AutoCloseable {
 
     private val appContext = context.applicationContext
@@ -112,6 +114,29 @@ class MobileClipEngine private constructor(
                 )
             }
         }
+    }
+
+    override suspend fun findSimilar(
+        targetPhotoId: String,
+        candidatePhotoIds: Set<String>,
+        limit: Int
+    ): List<FindSimilarPhotosSkill.SimilarPhoto> = withContext(Dispatchers.IO) {
+        val target = readEmbedding(targetPhotoId) ?: return@withContext emptyList()
+        candidatePhotoIds.asSequence()
+            .filterNot { it == targetPhotoId }
+            .mapNotNull { photoId ->
+                readEmbedding(photoId)?.let { vector ->
+                    val similarity = cosine(target, vector).coerceIn(0f, 1f)
+                    FindSimilarPhotosSkill.SimilarPhoto(
+                        photoId = photoId,
+                        similarity = similarity,
+                        explanation = "MobileCLIP 图像相似度 %.3f".format(similarity)
+                    )
+                }
+            }
+            .sortedByDescending(FindSimilarPhotosSkill.SimilarPhoto::similarity)
+            .take(limit.coerceAtLeast(0))
+            .toList()
     }
 
     /** 创建或读取图片向量；重复分析不会再次运行模型。 */

@@ -4,13 +4,15 @@ import com.example.isip.data.PhotoRepository
 import com.example.isip.data.model.ImageAnalysisResult
 import com.example.isip.data.model.SearchResult
 import com.example.isip.domain.skill.SearchPhotosSkill
+import com.example.isip.domain.skill.SemanticSearchSkill
 
 /**
  * 检索照片用例
  */
 class SearchPhotosUseCase(
     private val photoRepository: PhotoRepository,
-    private val searchSkill: SearchPhotosSkill = SearchPhotosSkill()
+    private val searchSkill: SearchPhotosSkill = SearchPhotosSkill(),
+    private val semanticSearchSkill: SemanticSearchSkill? = null
 ) {
 
     /**
@@ -19,11 +21,10 @@ class SearchPhotosUseCase(
     suspend fun search(query: String): SearchResult {
         val analyses = photoRepository.getAllAnalysisResults()
 
-        return searchSkill.execute(
-            SearchPhotosSkill.Input(
-                query = query,
-                analyses = analyses
-            )
+        return semanticSearchSkill?.execute(
+            SemanticSearchSkill.Input(query = query, analyses = analyses)
+        ) ?: searchSkill.execute(
+            SearchPhotosSkill.Input(query = query, analyses = analyses)
         )
     }
 

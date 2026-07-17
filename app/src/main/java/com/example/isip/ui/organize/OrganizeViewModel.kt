@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.domain.usecase.OrganizePhotosUseCase
+import com.example.isip.domain.usecase.SmartAlbumUseCase
 import com.example.isip.data.ai.MobileClipProvider
+import com.example.isip.data.model.OrganizationPlan
+import com.example.isip.domain.skill.CreateSmartAlbumSkill
 import com.example.isip.domain.skill.GenerateStrategySkill
 import com.example.isip.ui.model.*
 import java.text.SimpleDateFormat
@@ -19,6 +22,7 @@ import java.util.Locale
 
 data class OrganizeUiState(
     val plan: OrganizationPlanUiModel? = null,
+    val sourcePlan: OrganizationPlan? = null,
     val selectedSuggestionIds: Set<String> = emptySet(),
     val isGeneratingPlan: Boolean = false,
     val actionPreview: BatchActionPreviewUi? = null,
@@ -41,6 +45,7 @@ class OrganizeViewModel(application: Application) : AndroidViewModel(application
         repository,
         GenerateStrategySkill(MobileClipProvider.getOrNull(application))
     )
+    private val smartAlbumUseCase = SmartAlbumUseCase(repository)
 
     private val _uiState = MutableStateFlow(OrganizeUiState())
     val uiState: StateFlow<OrganizeUiState> = _uiState.asStateFlow()
@@ -124,6 +129,7 @@ class OrganizeViewModel(application: Application) : AndroidViewModel(application
                 _uiState.update {
                     it.copy(
                         plan = uiPlan,
+                        sourcePlan = plan,
                         isGeneratingPlan = false
                     )
                 }
@@ -150,9 +156,36 @@ class OrganizeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun executeSelected() {
-        // TODO: 实现执行整理逻辑
         viewModelScope.launch {
-            // 显示预览、获取确认、然后执行
+            val state = _uiState.value
+            val plan = state.sourcePlan ?: return@launch
+            val selectedAlbums = plan.albums.filter { it.id in state.selectedSuggestionIds }
+            if (selectedAlbums.isEmpty()) return@launch
+
+            try {
+                val existingNames = smartAlbumUseCase.getAll().map { it.name }.toSet()
+                selectedAlbums.filterNot { it.name in existingNames }.forEach { album ->
+                    smartAlbumUseCase.create(
+                        CreateSmartAlbumSkill.Input(
+                            name = album.name,
+                            photoIds = album.photoIds,
+                            categories = listOf(album.name.removeSuffix(" 相册")),
+                            createdBy = "organize"
+                        )
+                    )
+                }
+                _uiState.update {
+                    it.copy(
+                        selectedSuggestionIds = emptySet(),
+                        lastActionUndoable = false,
+                        errorMessage = null
+                    )
+                }
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = "创建智能相册失败: ${error.message}")
+                }
+            }
         }
     }
 

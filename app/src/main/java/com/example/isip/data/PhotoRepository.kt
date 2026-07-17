@@ -7,10 +7,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import com.example.isip.data.db.AppDatabase
+import com.example.isip.data.db.ManualTagEntity
 import com.example.isip.data.db.PhotoAiEntity
 import com.example.isip.data.db.PhotoEntity
 import com.example.isip.data.model.ImageAnalysisResult
 import com.example.isip.data.model.Photo
+import com.example.isip.data.model.SmartAlbum
+import com.example.isip.data.model.SmartAlbumRule
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +30,8 @@ class PhotoRepository(
     private val database = AppDatabase.getInstance(context)
     private val photoDao = database.photoDao()
     private val photoAiDao = database.photoAiDao()
+    private val manualTagDao = database.manualTagDao()
+    private val smartAlbumDao = database.smartAlbumDao()
     private val gson = Gson()
 
     /**
@@ -82,21 +87,138 @@ class PhotoRepository(
      */
     suspend fun getAnalysisResult(photoId: String): ImageAnalysisResult? = withContext(Dispatchers.IO) {
         val photoEntity = photoDao.getPhotoByAssetId(photoId) ?: return@withContext null
-        val aiEntity = photoAiDao.getPhotoAiByPhotoId(photoEntity.id) ?: return@withContext null
-        return@withContext aiEntity.toModel(photoEntity.assetId)
+        val modelResult = photoAiDao.getPhotoAiByPhotoId(photoEntity.id)
+            ?.toModel(photoEntity.assetId)
+        val manualTags = manualTagDao.getManualTagsByPhotoId(photoEntity.id)
+            .map { it.displayTag }
+
+        return@withContext when {
+            modelResult != null -> modelResult.withManualTags(manualTags)
+            manualTags.isNotEmpty() -> ImageAnalysisResult(
+                photoId = photoEntity.assetId,
+                categories = emptyList(),
+                ocrText = "",
+                tags = manualTags,
+                description = "",
+                confidence = MANUAL_TAG_CONFIDENCE,
+                modelName = MANUAL_TAG_MODEL,
+                modelVersion = "1"
+            )
+            else -> null
+        }
     }
 
     /**
-     * Gets all persisted analysis records with one Room query.
-     *
-     * Search previously rescanned MediaStore and then queried the database once per
-     * photo, making its latency proportional to the entire gallery rather than to
-     * the already-indexed analysis records.
+     * 以两次批量 Room 查询加载模型分析和手动标签，避免搜索时重扫 MediaStore 或
+     * 按照片逐条查询数据库。
      */
     suspend fun getAllAnalysisResults(): List<ImageAnalysisResult> = withContext(Dispatchers.IO) {
-        photoAiDao.getAllPhotoAiWithAssetIds().map { row ->
-            row.analysis.toModel(row.assetId)
-        }
+        val manualTagsByAssetId = manualTagDao.getAllManualTagsWithAssetIds()
+            .groupBy({ it.assetId }, { it.tag.displayTag })
+        val modelResultsByAssetId = photoAiDao.getAllPhotoAiWithAssetIds()
+            .associate { row -> row.assetId to row.analysis.toModel(row.assetId) }
+
+        (modelResultsByAssetId.keys + manualTagsByAssetId.keys).toSet()
+            .sorted()
+            .mapNotNull { assetId ->
+                val manualTags = manualTagsByAssetId[assetId].orEmpty()
+                val modelResult = modelResultsByAssetId[assetId]
+                when {
+                    modelResult != null -> modelResult.withManualTags(manualTags)
+                    manualTags.isNotEmpty() -> ImageAnalysisResult(
+                        photoId = assetId,
+                        categories = emptyList(),
+                        ocrText = "",
+                        tags = manualTags,
+                        description = "",
+                        confidence = MANUAL_TAG_CONFIDENCE,
+                        modelName = MANUAL_TAG_MODEL,
+                        modelVersion = "1"
+                    )
+                    else -> null
+                }
+            }
+    }
+
+    /**
+     * 保存用户手动标签。只有当前 MediaStore 索引中的照片会被写入，调用方可由
+     * 返回值得知哪些 photoId 已实际更新。
+     */
+    suspend fun addManualTags(
+        photoIds: Collection<String>,
+        tags: Collection<String>,
+        source: String = "user"
+    ): List<String> = withContext(Dispatchers.IO) {
+        val normalizedTags = tags.mapNotNull(::normalizeTag).distinctBy { it.normalized }
+        if (photoIds.isEmpty() || normalizedTags.isEmpty()) return@withContext emptyList()
+
+        val existingPhotos = photoDao.getPhotosByAssetIds(photoIds.distinct())
+        manualTagDao.insertManualTags(
+            existingPhotos.flatMap { photo ->
+                normalizedTags.map { tag ->
+                    ManualTagEntity(
+                        photoId = photo.id,
+                        normalizedTag = tag.normalized,
+                        displayTag = tag.display,
+                        source = source
+                    )
+                }
+            }
+        )
+        existingPhotos.map { it.assetId }
+    }
+
+    /** 保存智能相册规则，并返回带数据库 ID 的相册。 */
+    suspend fun saveSmartAlbum(album: SmartAlbum): SmartAlbum = withContext(Dispatchers.IO) {
+        val id = smartAlbumDao.insertSmartAlbum(album.toEntity())
+        album.copy(id = id)
+    }
+
+    suspend fun getSmartAlbums(): List<SmartAlbum> = withContext(Dispatchers.IO) {
+        smartAlbumDao.getAllSmartAlbums().map { it.toModel() }
+    }
+
+    suspend fun deleteSmartAlbum(id: Long) = withContext(Dispatchers.IO) {
+        smartAlbumDao.deleteSmartAlbum(id)
+    }
+
+    private data class NormalizedTag(val normalized: String, val display: String)
+
+    private fun normalizeTag(raw: String): NormalizedTag? {
+        val value = raw.trim().removePrefix("#").replace(Regex("\\s+"), " ")
+        if (value.isEmpty()) return null
+        return NormalizedTag(
+            normalized = value.lowercase(),
+            display = "#$value"
+        )
+    }
+
+    private fun ImageAnalysisResult.withManualTags(manualTags: List<String>): ImageAnalysisResult = copy(
+        tags = (tags + manualTags)
+            .mapNotNull(::normalizeTag)
+            .distinctBy { it.normalized }
+            .map { it.display }
+    )
+
+    private fun SmartAlbum.toEntity() = com.example.isip.data.db.SmartAlbumEntity(
+        id = id,
+        name = name,
+        ruleJson = gson.toJson(rule),
+        createdBy = createdBy,
+        createdAt = createdAt
+    )
+
+    private fun com.example.isip.data.db.SmartAlbumEntity.toModel(): SmartAlbum {
+        val rule = runCatching {
+            gson.fromJson(ruleJson, SmartAlbumRule::class.java)
+        }.getOrDefault(SmartAlbumRule())
+        return SmartAlbum(
+            id = id,
+            name = name,
+            rule = rule,
+            createdBy = createdBy,
+            createdAt = createdAt
+        )
     }
 
     /**
@@ -316,6 +438,9 @@ class PhotoRepository(
     }
 
     companion object {
+        private const val MANUAL_TAG_CONFIDENCE = 1f
+        private const val MANUAL_TAG_MODEL = "manual-tags"
+
         @Volatile
         private var INSTANCE: PhotoRepository? = null
 

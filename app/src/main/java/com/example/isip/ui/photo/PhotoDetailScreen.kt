@@ -65,6 +65,7 @@ fun PhotoDetailScreen(
 
                 uiState.photo != null -> {
                     val photo = uiState.photo!!
+                    var tagInput by remember(photo.id) { mutableStateOf("") }
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -120,6 +121,36 @@ fun PhotoDetailScreen(
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
+
+                            Text(
+                                text = "手动标签",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = tagInput,
+                                    onValueChange = { tagInput = it },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    label = { Text("例如：旅行") }
+                                )
+                                Button(
+                                    onClick = {
+                                        viewModel.onEvent(PhotoDetailUiEvent.AddTag(tagInput))
+                                        tagInput = ""
+                                    },
+                                    enabled = tagInput.trim().isNotEmpty() && !uiState.isAddingTag
+                                ) {
+                                    Text(if (uiState.isAddingTag) "添加中" else "添加")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
 
                             // Analysis results
                             if (photo.isAnalyzed) {

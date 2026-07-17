@@ -57,30 +57,22 @@ class GenerateStrategySkill(
 
     private suspend fun buildDuplicates(
         ids: Set<String>, photos: Map<String, Photo>, threshold: Float
-    ): List<DuplicateGroup> {
-        val pairs = runCatching { clipSimilarityEngine?.findSimilar(ids, threshold).orEmpty() }
-            .getOrDefault(emptyList()).filter {
-                it.firstPhotoId in ids && it.secondPhotoId in ids &&
-                    it.firstPhotoId != it.secondPhotoId && it.similarity >= threshold
+    ): List<DuplicateGroup> = FindDuplicatesSkill(
+        FindDuplicatesSkill.SimilarityEngine { photoIds, requestedThreshold ->
+            clipSimilarityEngine?.findSimilar(photoIds, requestedThreshold).orEmpty().map { pair ->
+                FindDuplicatesSkill.SimilarPair(
+                    firstPhotoId = pair.firstPhotoId,
+                    secondPhotoId = pair.secondPhotoId,
+                    similarity = pair.similarity
+                )
             }
-        if (pairs.isEmpty()) return emptyList()
-
-        val parent = ids.associateWith { it }.toMutableMap()
-        fun root(id: String): String {
-            var current = id
-            while (parent.getValue(current) != current) current = parent.getValue(current)
-            return current
         }
-        pairs.forEach { pair -> parent[root(pair.secondPhotoId)] = root(pair.firstPhotoId) }
-        return ids.groupBy(::root).values.filter { it.size > 1 }.map { group ->
-            val similarities = pairs.filter { it.firstPhotoId in group && it.secondPhotoId in group }
-            DuplicateGroup(
-                photoIds = group.sorted(),
-                similarity = similarities.maxOf { it.similarity }.coerceIn(0f, 1f),
-                recommendKeep = group.maxByOrNull { photos[it]?.sizeBytes ?: 0L } ?: group.first()
-            )
-        }
-    }
+    ).execute(
+        FindDuplicatesSkill.Input(
+            photos = ids.mapNotNull(photos::get),
+            threshold = threshold
+        )
+    )
 
     private fun detectPrivacy(result: ImageAnalysisResult): List<PrivacyAlert> {
         val text = (result.categories + result.tags + result.ocrText).joinToString(" ")

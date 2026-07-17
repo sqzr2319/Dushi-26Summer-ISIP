@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.data.ai.HybridPhotoContentAnalyzer
 import com.example.isip.data.ai.MobileClipProvider
+import com.example.isip.domain.usecase.AddTagUseCase
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import java.text.SimpleDateFormat
@@ -23,12 +24,14 @@ data class PhotoDetailUiState(
     val description: String? = null,
     val isLoading: Boolean = false,
     val isAnalyzing: Boolean = false,
+    val isAddingTag: Boolean = false,
     val errorMessage: String? = null
 )
 
 sealed interface PhotoDetailUiEvent {
     data object StartAnalysis : PhotoDetailUiEvent
     data object Reanalyze : PhotoDetailUiEvent
+    data class AddTag(val tag: String) : PhotoDetailUiEvent
     data object Delete : PhotoDetailUiEvent
     data object CopyOcrText : PhotoDetailUiEvent
 }
@@ -43,6 +46,7 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
         HybridPhotoContentAnalyzer(application),  // 混合模式：本地优先
         MobileClipProvider.getOrNull(application)
     )
+    private val addTagUseCase = AddTagUseCase(repository)
 
     private val _uiState = MutableStateFlow(PhotoDetailUiState())
     val uiState: StateFlow<PhotoDetailUiState> = _uiState.asStateFlow()
@@ -102,6 +106,7 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
         when (event) {
             is PhotoDetailUiEvent.StartAnalysis -> startAnalysis()
             is PhotoDetailUiEvent.Reanalyze -> startAnalysis(force = true)
+            is PhotoDetailUiEvent.AddTag -> addTag(event.tag)
             is PhotoDetailUiEvent.Delete -> deletePhoto()
             is PhotoDetailUiEvent.CopyOcrText -> copyOcrText()
         }
@@ -133,6 +138,27 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun deletePhoto() {
         // TODO: 实现删除功能（需要确认对话框）
+    }
+
+    private fun addTag(tag: String) {
+        val photoId = _uiState.value.photo?.id ?: return
+        if (_uiState.value.isAddingTag) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAddingTag = true, errorMessage = null) }
+            try {
+                val result = addTagUseCase.addTags(listOf(photoId), listOf(tag))
+                if (result.updatedPhotoIds.isEmpty()) {
+                    _uiState.update { it.copy(errorMessage = "未能为该照片添加标签") }
+                } else {
+                    loadPhoto(photoId)
+                }
+            } catch (error: Exception) {
+                _uiState.update { it.copy(errorMessage = "添加标签失败: ${error.message}") }
+            } finally {
+                _uiState.update { it.copy(isAddingTag = false) }
+            }
+        }
     }
 
     private fun copyOcrText() {
