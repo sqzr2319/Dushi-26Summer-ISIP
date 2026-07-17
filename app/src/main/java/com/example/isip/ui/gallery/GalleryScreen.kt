@@ -1,9 +1,11 @@
 package com.example.isip.ui.gallery
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -24,6 +26,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.isip.ui.common.*
+import com.example.isip.data.media.MediaStoreDeleteConfirmation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +59,20 @@ fun GalleryScreen(
         viewModel.onEvent(GalleryUiEvent.PermissionResult(results.values.any { it }))
     }
     val requestPhotoPermission = { permissionLauncher.launch(requestedPermissions) }
+    val systemDeleteLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        uiState.pendingDeleteRequest?.let { request ->
+            val approved = result.resultCode == Activity.RESULT_OK
+            viewModel.onEvent(
+                GalleryUiEvent.DeleteConfirmationResult(
+                    requestId = request.requestId,
+                    approved = approved,
+                    systemDeleteCompleted = approved
+                )
+            )
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.onEvent(GalleryUiEvent.PermissionResult(hasPhotoPermission()))
@@ -65,6 +82,26 @@ fun GalleryScreen(
     }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.pendingDeleteRequest) {
+        val request = uiState.pendingDeleteRequest ?: return@LaunchedEffect
+        val sender = runCatching {
+            MediaStoreDeleteConfirmation(context).createIntentSender(request.photoIds)
+        }.getOrElse {
+            viewModel.onEvent(
+                GalleryUiEvent.DeleteConfirmationResult(request.requestId, false, false)
+            )
+            return@LaunchedEffect
+        }
+        if (sender != null) {
+            systemDeleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
+        } else {
+            // The app confirmation dialog is sufficient on legacy Android.
+            viewModel.onEvent(
+                GalleryUiEvent.DeleteConfirmationResult(request.requestId, true, false)
+            )
+        }
+    }
 
     // Returning from PhotoDetailScreen resumes this destination but reuses its
     // ViewModel. Refresh so newly saved analysis results become visible.

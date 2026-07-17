@@ -58,6 +58,9 @@ interface PhotoDao {
     @Query("DELETE FROM photos WHERE id = :photoId")
     suspend fun deletePhoto(photoId: Long)
 
+    @Query("DELETE FROM photos WHERE asset_id IN (:assetIds)")
+    suspend fun deletePhotosByAssetIds(assetIds: List<String>)
+
     @Query("DELETE FROM photos")
     suspend fun deleteAllPhotos()
 
