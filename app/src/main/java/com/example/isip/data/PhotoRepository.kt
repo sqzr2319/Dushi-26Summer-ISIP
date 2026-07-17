@@ -161,6 +161,13 @@ class PhotoRepository(
         photoAiDao.deleteAllPhotoAi()
     }
 
+    /** Removes database rows only after MediaStore confirms that deletion succeeded. */
+    suspend fun removeDeletedPhotoRecords(photoIds: Collection<String>) = withContext(Dispatchers.IO) {
+        photoIds.filter(String::isNotBlank).distinct().chunked(900).forEach { batch ->
+            photoDao.deletePhotosByAssetIds(batch)
+        }
+    }
+
     private suspend fun scanMediaStorePhotos(): List<Photo> = withContext(Dispatchers.IO) {
         val photos = mutableListOf<Photo>()
         val projection = buildProjection()

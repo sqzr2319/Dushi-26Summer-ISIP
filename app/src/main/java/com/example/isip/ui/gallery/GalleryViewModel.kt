@@ -11,6 +11,9 @@ import kotlinx.coroutines.launch
 import com.example.isip.data.PhotoRepository
 import com.example.isip.data.ai.HybridPhotoContentAnalyzer
 import com.example.isip.data.ai.MobileClipProvider
+import com.example.isip.data.media.MediaStorePhotoDeletionGateway
+import com.example.isip.domain.skill.DeletePhotoSkill
+import com.example.isip.domain.skill.SummarizeSelectionSkill
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.AnalysisProgressUi
@@ -23,6 +26,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     // 初始化 Repository 和 UseCase
     // 使用 HybridPhotoContentAnalyzer: 优先本地 Qwen3.5-2B-UD，失败时降级到云端
     private val repository = PhotoRepository.getInstance(application)
+    private val mediaStoreDeletionGateway = MediaStorePhotoDeletionGateway(application, repository)
+    private val deletePhotoSkill = DeletePhotoSkill(mediaStoreDeletionGateway)
+    private val summarizeSelectionSkill = SummarizeSelectionSkill()
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
         HybridPhotoContentAnalyzer(application),  // 混合模式：本地优先
@@ -45,6 +51,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             is GalleryUiEvent.OpenPhoto -> {}
             is GalleryUiEvent.ClearSelection -> clearSelection()
             is GalleryUiEvent.DeleteSelected -> deleteSelected()
+            is GalleryUiEvent.ShowSelectionSummary -> showSelectionSummary()
+            is GalleryUiEvent.DismissSelectionSummary -> dismissSelectionSummary()
+            is GalleryUiEvent.DeleteConfirmationResult -> confirmDelete(event)
         }
     }
 
@@ -176,23 +185,69 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 currentState.selectedPhotoIds + photoId
             }
-            currentState.copy(selectedPhotoIds = newSelection)
+            currentState.copy(selectedPhotoIds = newSelection, selectionSummary = null)
         }
     }
 
     private fun clearSelection() {
-        _uiState.update { it.copy(selectedPhotoIds = emptySet()) }
+        _uiState.update { it.copy(selectedPhotoIds = emptySet(), selectionSummary = null) }
+    }
+
+    private fun showSelectionSummary() {
+        val selectedIds = _uiState.value.selectedPhotoIds
+        if (selectedIds.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val photos = selectedIds.mapNotNull { repository.getPhotoById(it) }
+                val analyses = repository.getAllAnalysisResults().filter { it.photoId in selectedIds }
+                val summary = summarizeSelectionSkill.execute(
+                    SummarizeSelectionSkill.Input(photos = photos, analyses = analyses)
+                )
+                _uiState.update { it.copy(selectionSummary = summary, errorMessage = null) }
+            } catch (error: Exception) {
+                _uiState.update { it.copy(errorMessage = "生成选择摘要失败: ${error.message}") }
+            }
+        }
+    }
+
+    private fun dismissSelectionSummary() {
+        _uiState.update { it.copy(selectionSummary = null) }
     }
 
     private fun deleteSelected() {
+        val selectedIds = _uiState.value.selectedPhotoIds.toList()
+        if (selectedIds.isEmpty()) return
+        val request = deletePhotoSkill.requestDeleteAfterConfirmation(selectedIds)
+        _uiState.update { it.copy(pendingDeleteRequest = request, errorMessage = null) }
+    }
+
+    private fun confirmDelete(event: GalleryUiEvent.DeleteConfirmationResult) {
         viewModelScope.launch {
-            val selectedIds = _uiState.value.selectedPhotoIds
-            // TODO: 实际删除照片文件
-            _uiState.update {
-                it.copy(
-                    photos = it.photos.filterNot { photo -> photo.id in selectedIds },
-                    selectedPhotoIds = emptySet()
-                )
+            val request = _uiState.value.pendingDeleteRequest
+            if (request?.requestId != event.requestId) return@launch
+            _uiState.update { it.copy(pendingDeleteRequest = null) }
+            try {
+                val result = if (event.approved && event.systemDeleteCompleted) {
+                    deletePhotoSkill.confirm(
+                        DeletePhotoSkill.Confirmation(event.requestId, true),
+                        deletionCompletedBySystem = true
+                    )
+                } else {
+                    deletePhotoSkill.confirm(
+                        DeletePhotoSkill.Confirmation(event.requestId, event.approved)
+                    )
+                }
+                if (result.cancelled) return@launch
+                _uiState.update { state ->
+                    state.copy(
+                        photos = state.photos.filterNot { it.id in result.deletedIds },
+                        selectedPhotoIds = state.selectedPhotoIds - result.deletedIds.toSet(),
+                        errorMessage = result.failedIds.takeIf(List<String>::isNotEmpty)
+                            ?.let { "${it.size} 张照片删除失败，请重新授权后重试" }
+                    )
+                }
+            } catch (error: Exception) {
+                _uiState.update { it.copy(errorMessage = "删除失败: ${error.message}") }
             }
         }
     }

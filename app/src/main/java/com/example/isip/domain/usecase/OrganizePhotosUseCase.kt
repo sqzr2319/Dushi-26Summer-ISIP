@@ -4,6 +4,7 @@ import com.example.isip.data.PhotoRepository
 import com.example.isip.data.model.*
 import com.example.isip.utils.ImageUtils
 import java.util.Calendar
+import com.example.isip.domain.skill.DeletePhotoSkill
 import com.example.isip.domain.skill.GenerateStrategySkill
 
 /**
@@ -12,7 +13,8 @@ import com.example.isip.domain.skill.GenerateStrategySkill
  */
 class OrganizePhotosUseCase(
     private val photoRepository: PhotoRepository,
-    private val strategySkill: GenerateStrategySkill = GenerateStrategySkill()
+    private val strategySkill: GenerateStrategySkill = GenerateStrategySkill(),
+    private val cleanupCoordinator: CleanupCoordinatorUseCase? = null
 ) {
 
     /**
@@ -51,16 +53,35 @@ class OrganizePhotosUseCase(
         )
     }
 
-    /**
-     * 应用整理方案（执行清理操作）
-     */
-    suspend fun applyOrganizationPlan(plan: OrganizationPlan, confirmations: OrganizationConfirmations): Boolean {
-        // TODO: 实现整理方案的应用
-        // 1. 删除重复照片（用户确认的）
-        // 2. 创建相册
-        // 3. 移动/加密隐私照片
-        return true
+    /** Builds the exact cleanup preview that the UI must show before deletion. */
+    suspend fun reviewDuplicateCleanup(
+        plan: OrganizationPlan,
+        selectedCandidateIds: Set<String>? = null,
+        keepOverrides: Map<String, String> = emptyMap(),
+        protectedPhotoIds: Set<String> = emptySet()
+    ): CleanupReview {
+        val coordinator = requireNotNull(cleanupCoordinator) { "清理协调器尚未配置" }
+        return coordinator.reviewPhotoDuplicates(
+            plan = plan,
+            photos = photoRepository.getAllPhotos(),
+            selectedCandidateIds = selectedCandidateIds,
+            keepOverrides = keepOverrides,
+            protectedPhotoIds = protectedPhotoIds
+        )
     }
+
+    /** Creates a one-time request for the IDs shown in [review]. */
+    fun requestDeleteAfterReview(review: CleanupReview): DeletePhotoSkill.DeleteRequest =
+        requireNotNull(cleanupCoordinator) { "清理协调器尚未配置" }
+            .requestDeleteAfterReview(review)
+
+    /** Consumes the one-time request and performs or records the confirmed deletion. */
+    suspend fun confirmCleanupDeletion(
+        requestId: String,
+        approved: Boolean,
+        deletionCompletedBySystem: Boolean = false
+    ): DeletePhotoSkill.DeleteResult = requireNotNull(cleanupCoordinator) { "清理协调器尚未配置" }
+        .confirmDeletion(requestId, approved, deletionCompletedBySystem)
 
     /**
      * 生成事件相册（按时间和地点分组）

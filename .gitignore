@@ -16,3 +16,5 @@ tools/.models/
 local.properties
 .kagent
 *.gguf
+.venv-qwen/
+tools/qwen35_server.*.log

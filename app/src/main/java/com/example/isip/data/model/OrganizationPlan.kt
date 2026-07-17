@@ -10,7 +10,24 @@ data class OrganizationPlan(
     val duplicates: List<DuplicateGroup>,   // 重复照片组列表
     val privacyRisks: List<PrivacyAlert>,   // 隐私风险列表
     val suggestions: List<String>,          // 整理建议列表
+    val similarPhotos: List<SimilarPhotoGroup> = emptyList(),
+    val tagSuggestions: List<TagSuggestion> = emptyList(),
     val generatedAt: Long = System.currentTimeMillis()
+)
+
+/** FindSimilarPhotosSkill 的标准输出端口。 */
+data class SimilarPhotoGroup(
+    val id: String,
+    val photoIds: List<String>,
+    val similarity: Float,
+    val reason: String
+)
+
+/** AddTagSkill 的标准输出端口；这里只保存建议，不直接写回照片。 */
+data class TagSuggestion(
+    val photoId: String,
+    val tags: List<String>,
+    val reason: String? = null
 )
 
 /**

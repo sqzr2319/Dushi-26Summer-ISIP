@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
 
-REPO = "https://huggingface.co/plainhub/mobileclip-s2-tflite/resolve/main"
+HF_ENDPOINT = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
+REPO = f"{HF_ENDPOINT}/plainhub/mobileclip-s2-tflite/resolve/main"
 FILES = {
     "mobileclip_s2_image.tflite": "mobileclip_image.tflite",
     "mobileclip_s2_text.tflite": "mobileclip_text.tflite",
