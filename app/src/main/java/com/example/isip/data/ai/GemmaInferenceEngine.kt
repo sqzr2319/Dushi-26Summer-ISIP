@@ -8,14 +8,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Qwen3.5-2B-UD 推理引擎（llama.cpp + GGUF 实现）
+ * Gemma 4 E2B 推理引擎（llama.cpp + GGUF 实现）
  *
  * 使用 llama.cpp 引擎加载 GGUF 格式的量化模型
  * 支持多模态输入（文本 + 图像）
  *
  * 模型要求：
- * - Qwen3.5-2B-UD-Q2_K_XL.gguf (主模型)
- * - mmproj-F16.gguf (多模态投影层)
+ * - gemma-4-E2B_q4_0-it.gguf (主模型)
+ * - gemma-4-E2B-it-mmproj.gguf (多模态投影层)
  */
 class GemmaInferenceEngine private constructor(
     private val context: Context,
@@ -37,7 +37,7 @@ class GemmaInferenceEngine private constructor(
         mmProjPath: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "正在初始化 Qwen GGUF 模型...")
+            Log.i(TAG, "正在初始化 Gemma GGUF 模型...")
             Log.i(TAG, "主模型: $modelPath")
             if (mmProjPath != null) {
                 Log.i(TAG, "多模态投影层: $mmProjPath")
@@ -66,11 +66,11 @@ class GemmaInferenceEngine private constructor(
             llamaWrapper?.initialize(actualModelPath, actualMmProjPath)
 
             isInitialized = true
-            Log.i(TAG, "✅ Qwen 模型初始化成功")
+            Log.i(TAG, "✅ Gemma 模型初始化成功")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ 模型初始化失败", e)
-            throw ModelInitializationException("无法初始化 Qwen 模型: ${e.message}", e)
+            throw ModelInitializationException("无法初始化 Gemma 模型: ${e.message}", e)
         }
     }
 
@@ -79,29 +79,21 @@ class GemmaInferenceEngine private constructor(
      * 如果文件已存在且大小正确，则跳过复制
      */
     private fun copyModelFromAssets(assetPath: String): String {
-        val fileName = assetPath.substringAfterLast("/")
-        val destFile = File(context.filesDir, fileName)
+        val suppliedFile = File(assetPath)
+        if (suppliedFile.isAbsolute && suppliedFile.isFile) {
+            Log.d(TAG, "使用显式模型路径: ${suppliedFile.absolutePath}")
+            return suppliedFile.absolutePath
+        }
 
-        // 检查文件是否已存在
-        if (destFile.exists()) {
-            try {
-                // 验证文件大小是否匹配
-                val assetSize = context.assets.openFd(assetPath).length
-                if (destFile.length() == assetSize) {
-                    Log.d(TAG, "模型文件已存在，跳过复制: ${destFile.absolutePath}")
-                    return destFile.absolutePath
-                } else {
-                    Log.w(TAG, "模型文件大小不匹配，重新复制")
-                    destFile.delete()
-                }
-            } catch (e: Exception) {
-                // 如果是绝对路径，直接返回
-                val absoluteFile = File(assetPath)
-                if (absoluteFile.exists()) {
-                    Log.d(TAG, "使用绝对路径: $assetPath")
-                    return assetPath
-                }
-            }
+        val fileName = assetPath.substringAfterLast("/")
+        val modelsDir = File(context.filesDir, "models").apply { mkdirs() }
+        val destFile = File(modelsDir, fileName)
+
+        // The deployment script puts large model files here. This check avoids
+        // trying to open a non-existent 4 GB asset on every analysis.
+        if (destFile.isFile && destFile.length() > 0L) {
+            Log.d(TAG, "使用已部署模型: ${destFile.absolutePath}")
+            return destFile.absolutePath
         }
 
         // 复制文件
@@ -134,14 +126,10 @@ class GemmaInferenceEngine private constructor(
             return destFile.absolutePath
 
         } catch (e: Exception) {
-            // 尝试作为绝对路径
-            val absoluteFile = File(assetPath)
-            if (absoluteFile.exists()) {
-                Log.d(TAG, "使用绝对路径: $assetPath")
-                return assetPath
-            }
-
-            throw ModelInitializationException("无法复制模型文件: ${e.message}", e)
+            throw ModelInitializationException(
+                "未找到模型 $fileName。请先用 tools/prepare_gemma4_model.py 将其部署到 ${destFile.absolutePath}",
+                e
+            )
         }
     }
 
@@ -319,7 +307,7 @@ class GemmaInferenceEngine private constructor(
           "categories": ["照片"],
           "tags": ["#示例标签", "#${if (isLandscape) "横向" else "竖向"}"],
           "ocr_text": "",
-          "description": "Qwen GGUF 模型占位实现 - 等待 llama.cpp 集成",
+          "description": "Gemma GGUF 模型占位实现 - 等待 llama.cpp 集成",
           "confidence": 0.5,
           "labels": [
             {"label": "占位", "confidence": 0.5}
@@ -391,7 +379,7 @@ data class ModelConfig(
     val maxTokens: Int = 512,                // 最大生成 token 数
     val temperature: Float = 0.7f,           // 采样温度
     val contextSize: Int = 2048,             // 上下文窗口大小
-    val quantizationType: QuantizationType = QuantizationType.Q2_K_XL  // GGUF 量化类型
+    val quantizationType: QuantizationType = QuantizationType.Q4_0  // GGUF 量化类型
 )
 
 enum class QuantizationType {

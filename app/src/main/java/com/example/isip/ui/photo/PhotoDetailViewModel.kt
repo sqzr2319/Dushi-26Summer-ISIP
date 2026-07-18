@@ -39,11 +39,11 @@ sealed interface PhotoDetailUiEvent {
 class PhotoDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     // 初始化 Repository 和 UseCase
-    // 使用 HybridPhotoContentAnalyzer: 优先本地 Qwen3.5-2B-UD，失败时降级到云端
+    // 使用本地 Gemma 4；模型不可用时仅返回基础分类，不调用云端模型。
     private val repository = PhotoRepository.getInstance(application)
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
-        HybridPhotoContentAnalyzer(application),  // 混合模式：本地优先
+        HybridPhotoContentAnalyzer(application),
         MobileClipProvider.getOrNull(application)
     )
     private val addTagUseCase = AddTagUseCase(repository)

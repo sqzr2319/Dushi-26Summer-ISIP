@@ -20,12 +20,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField(
-            "String",
-            "QWEN35_ANALYSIS_URL",
-            "\"http://10.0.2.2:8000/analyze\""
-        )
-
         // 配置 NDK
         ndk {
             abiFilters.add("arm64-v8a")

@@ -8,7 +8,7 @@ import com.example.isip.data.model.SearchResult
  * 本地语义检索。
  *
  * 查询阶段只计算 MobileCLIP 文本 embedding，并融合已持久化的标签、分类、描述和
- * OCR；不会调用 Qwen，也不会再次传输或分析图片。
+ * OCR；不会再次传输或分析图片。
  */
 class SemanticSearchSkill(
     private val clipSearchEngine: SearchPhotosSkill.ClipSearchEngine? = null
@@ -131,7 +131,7 @@ class SemanticSearchSkill(
         |semantic_search
         |
         |## 功能
-        |使用 MobileCLIP 文本-图像相似度与本地标签/分类/OCR/描述融合检索照片。搜索阶段不会调用 Qwen。
+        |使用 MobileCLIP 文本-图像相似度与本地标签/分类/OCR/描述融合检索照片；搜索阶段不会再次分析图片。
         |
         |## 排序
         |有 CLIP 向量时：CLIP 70% + 标签/分类 25% + OCR/描述 5%；无 CLIP 时自动降级到本地文本匹配。

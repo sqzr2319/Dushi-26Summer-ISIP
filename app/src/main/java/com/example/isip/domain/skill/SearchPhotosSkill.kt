@@ -8,9 +8,9 @@ import kotlin.math.max
 /**
  * 使用自然语言检索已分析照片的 Agent Skill。
  *
- * 这一层不直接加载 MobileCLIP/Qwen 权重，而是组合三种能力：
+ * 这一层不直接加载模型权重，而是组合三种能力：
  * 1. 基于标签、分类、OCR 和描述的本地词法匹配；
- * 2. 可选的 QueryExpander（例如 Qwen），用于产生适合 CLIP 的英文查询与同义词；
+ * 2. 可选的 QueryExpander，用于产生适合 CLIP 的英文查询与同义词；
  * 3. 可选的 ClipSearchEngine，用于文本-图像向量召回。
  *
  * 任一可选模型不可用或推理失败时，检索会自动退化为纯本地词法匹配。
@@ -39,7 +39,7 @@ class SearchPhotosSkill(
         val explanation: String = ""
     )
 
-    /** Qwen 等语言模型可输出的查询扩展结果。 */
+    /** 可选的查询扩展器可输出的结果。 */
     data class QueryExpansion(
         val semanticQueries: List<String>,
         val keywords: List<String> = emptyList()

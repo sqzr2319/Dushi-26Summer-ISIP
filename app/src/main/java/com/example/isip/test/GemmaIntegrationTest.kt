@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.isip.data.ai.Gemma4Model
 import com.example.isip.data.ai.GemmaInferenceEngine
 import com.example.isip.data.ai.ModelConfig
 import com.example.isip.data.ai.QuantizationType
@@ -13,7 +14,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 测试 Qwen 模型集成的示例代码
+ * 测试 Gemma 4 模型集成的示例代码
  *
  * 用法：
  * 1. 在 MainActivity 中调用 testModelLoading()
@@ -30,12 +31,12 @@ class GemmaIntegrationTest {
         fun testModelLoading(activity: ComponentActivity) {
             activity.lifecycleScope.launch {
                 try {
-                    Log.i(TAG, "=== 开始测试 Qwen 模型集成 ===")
+                    Log.i(TAG, "=== 开始测试 Gemma 4 模型集成 ===")
 
                     // 1. 检查模型文件
                     Log.i(TAG, "1. 检查模型文件...")
-                    val mainModelPath = "models/Qwen3.5-2B-UD-Q2_K_XL.gguf"
-                    val mmProjPath = "models/mmproj-F16.gguf"
+                    val mainModelPath = Gemma4Model.MODEL_ASSET_PATH
+                    val mmProjPath = Gemma4Model.MMPROJ_ASSET_PATH
 
                     val mainModelFile = File(activity.filesDir, mainModelPath)
                     val mmProjFile = File(activity.filesDir, mmProjPath)
@@ -55,7 +56,7 @@ class GemmaIntegrationTest {
                             maxTokens = 256,
                             temperature = 0.3f,
                             contextSize = 2048,
-                            quantizationType = QuantizationType.Q2_K_XL
+                            quantizationType = QuantizationType.Q4_0
                         )
                     )
 
@@ -90,7 +91,7 @@ class GemmaIntegrationTest {
 
                     testBitmap.recycle()
 
-                    Log.i(TAG, "=== Qwen 模型集成测试完成 ===")
+                    Log.i(TAG, "=== Gemma 4 模型集成测试完成 ===")
                     Log.i(TAG, "✅ 所有测试通过")
 
                 } catch (e: Exception) {

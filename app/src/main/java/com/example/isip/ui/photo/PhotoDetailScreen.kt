@@ -231,7 +231,7 @@ fun PhotoDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !uiState.isAnalyzing
                                 ) {
-                                    Text(if (uiState.isAnalyzing) "Qwen3.5 正在分析…" else "重新使用 AI 模型分析")
+                                    Text(if (uiState.isAnalyzing) "Gemma 4 正在分析…" else "重新使用 AI 模型分析")
                                 }
                             } else {
                                 Button(
