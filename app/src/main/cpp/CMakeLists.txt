@@ -54,28 +54,51 @@ else()
     list(FILTER LLAMA_SOURCES EXCLUDE REGEX "ggml-cpu/arch/")
 endif()
 
-# 5. 创建 JNI 库
+# 5. 添加 mtmd 多模态支持的头文件路径
+include_directories(${LLAMA_CPP_DIR}/tools/mtmd)
+
+# 5b. mtmd 依赖的第三方头文件
+if(EXISTS "${LLAMA_CPP_DIR}/vendor/miniaudio")
+    include_directories(${LLAMA_CPP_DIR}/vendor)
+endif()
+
+# 6. 收集 mtmd 源文件
+file(GLOB_RECURSE MTMD_CORE_SOURCES
+    "${LLAMA_CPP_DIR}/tools/mtmd/mtmd.cpp"
+    "${LLAMA_CPP_DIR}/tools/mtmd/mtmd-image.cpp"
+    "${LLAMA_CPP_DIR}/tools/mtmd/mtmd-audio.cpp"
+    "${LLAMA_CPP_DIR}/tools/mtmd/mtmd-helper.cpp"
+    "${LLAMA_CPP_DIR}/tools/mtmd/clip.cpp"
+    "${LLAMA_CPP_DIR}/tools/mtmd/clip-graph.cpp"
+)
+file(GLOB_RECURSE MTMD_MODEL_SOURCES
+    "${LLAMA_CPP_DIR}/tools/mtmd/models/*.cpp"
+)
+
+# 7. 创建 JNI 库（含 mtmd）
 add_library(
     llama-jni
     SHARED
     llama_jni.cpp
     ${LLAMA_SOURCES}
+    ${MTMD_CORE_SOURCES}
+    ${MTMD_MODEL_SOURCES}
 )
 
-# 6. 链接
+# 8. 链接
 target_link_libraries(
     llama-jni
     ${log-lib}
     c++_shared
 )
 
-# 7. 编译选项
+# 9. 编译选项
 target_compile_options(llama-jni PRIVATE
     -O2
     -fPIC
 )
 
-# 8. 定义宏
+# 10. 定义宏
 target_compile_definitions(llama-jni PRIVATE
     GGML_BUILD=1
     GGML_SHARED=1
