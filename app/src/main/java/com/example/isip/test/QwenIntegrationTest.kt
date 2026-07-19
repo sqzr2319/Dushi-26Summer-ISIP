@@ -6,8 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.isip.data.ai.Gemma4Model
-import com.example.isip.data.ai.GemmaInferenceEngine
+import com.example.isip.data.ai.QwenModel
+import com.example.isip.data.ai.QwenInferenceEngine
 import com.example.isip.data.ai.ModelConfig
 import com.example.isip.data.ai.QuantizationType
 import kotlinx.coroutines.launch
@@ -20,10 +20,10 @@ import java.io.File
  * 1. 在 MainActivity 中调用 testModelLoading()
  * 2. 查看 logcat 输出验证模型加载和推理
  */
-class GemmaIntegrationTest {
+class QwenIntegrationTest {
 
     companion object {
-        private const val TAG = "GemmaIntegrationTest"
+        private const val TAG = "QwenIntegrationTest"
 
         /**
          * 测试模型加载
@@ -35,8 +35,8 @@ class GemmaIntegrationTest {
 
                     // 1. 检查模型文件
                     Log.i(TAG, "1. 检查模型文件...")
-                    val mainModelPath = Gemma4Model.MODEL_ASSET_PATH
-                    val mmProjPath = Gemma4Model.MMPROJ_ASSET_PATH
+                    val mainModelPath = QwenModel.MODEL_ASSET_PATH
+                    val mmProjPath = QwenModel.MMPROJ_ASSET_PATH
 
                     val mainModelFile = File(activity.filesDir, mainModelPath)
                     val mmProjFile = File(activity.filesDir, mmProjPath)
@@ -48,7 +48,7 @@ class GemmaIntegrationTest {
 
                     // 2. 初始化推理引擎
                     Log.i(TAG, "2. 初始化推理引擎...")
-                    val engine = GemmaInferenceEngine.getInstance(
+                    val engine = QwenInferenceEngine.getInstance(
                         activity,
                         ModelConfig(
                             useGPU = true,
@@ -151,7 +151,7 @@ class GemmaIntegrationTest {
  *         super.onCreate(savedInstanceState)
  *
  *         // 运行集成测试
- *         GemmaIntegrationTest.testModelLoading(this)
+ *         QwenIntegrationTest.testModelLoading(this)
  *
  *         setContent {
  *             // Your UI code

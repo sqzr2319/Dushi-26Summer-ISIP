@@ -121,10 +121,13 @@ class PhotoDetailViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 // 触发单张照片分析
                 val result = analyzeUseCase.analyzeSinglePhoto(photoId, force)
+                android.util.Log.d("PhotoDetailVM", "analyzeSinglePhoto returned: ${result?.categories} ${result?.tags?.take(3)}")
 
                 if (result != null) {
                     // 重新加载照片以显示分析结果
                     loadPhoto(photoId)
+                } else {
+                    android.util.Log.w("PhotoDetailVM", "analyzeSinglePhoto returned null!")
                 }
             } catch (e: Exception) {
                 _uiState.update {

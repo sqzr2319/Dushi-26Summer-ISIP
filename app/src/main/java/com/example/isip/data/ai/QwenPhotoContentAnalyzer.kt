@@ -13,14 +13,14 @@ import kotlinx.coroutines.withContext
  *
  * 使用 llama.cpp + GGUF 格式的量化模型进行端侧图像分析，无需网络连接。
  */
-class GemmaPhotoContentAnalyzer(
+class QwenPhotoContentAnalyzer(
     private val context: Context,
     private val modelPath: String = DEFAULT_MODEL_PATH,
     private val mmProjPath: String = DEFAULT_MMPROJ_PATH
 ) : PhotoContentAnalyzer {
 
-    private val inferenceEngine: GemmaInferenceEngine by lazy {
-        GemmaInferenceEngine.getInstance(context, ModelConfig(
+    private val inferenceEngine: QwenInferenceEngine by lazy {
+        QwenInferenceEngine.getInstance(context, ModelConfig(
             useGPU = true,
             numThreads = 4,
             maxTokens = 256,
@@ -32,8 +32,8 @@ class GemmaPhotoContentAnalyzer(
 
     private var isModelLoaded = false
 
-    override val modelName: String = Gemma4Model.MODEL_NAME
-    override val modelVersion: String = Gemma4Model.MODEL_VERSION
+    override val modelName: String = QwenModel.MODEL_NAME
+    override val modelVersion: String = QwenModel.MODEL_VERSION
 
     /**
      * 分析单张照片
@@ -187,8 +187,8 @@ class GemmaPhotoContentAnalyzer(
     }
 
     companion object {
-        private const val TAG = "GemmaPhotoContentAnalyzer"
-        private const val DEFAULT_MODEL_PATH = Gemma4Model.MODEL_ASSET_PATH
-        private const val DEFAULT_MMPROJ_PATH = Gemma4Model.MMPROJ_ASSET_PATH
+        private const val TAG = "QwenPhotoContentAnalyzer"
+        private const val DEFAULT_MODEL_PATH = QwenModel.MODEL_ASSET_PATH
+        private const val DEFAULT_MMPROJ_PATH = QwenModel.MMPROJ_ASSET_PATH
     }
 }

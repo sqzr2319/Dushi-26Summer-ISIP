@@ -12,33 +12,33 @@ import kotlinx.coroutines.withTimeout
  */
 class HybridPhotoContentAnalyzer(
     context: Context,
-    private val localTimeout: Long = 60_000L
+    private val localTimeout: Long = 180_000L  // 3 分钟（Qwen3.5 多模态约 75 秒）
 ) : PhotoContentAnalyzer {
 
-    private val gemmaAnalyzer = GemmaPhotoContentAnalyzer(context)
+    private val qwenAnalyzer = QwenPhotoContentAnalyzer(context)
     private var localAvailable = true
-    private var usedGemma = false
+    private var usedQwen = false
 
     override val modelName: String
-        get() = if (usedGemma) gemmaAnalyzer.modelName else "gemma-4-fallback"
+        get() = if (usedQwen) qwenAnalyzer.modelName else "qwen-fallback"
 
     override val modelVersion: String
-        get() = if (usedGemma) gemmaAnalyzer.modelVersion else "1.0"
+        get() = if (usedQwen) qwenAnalyzer.modelVersion else "1.0"
 
     override suspend fun analyze(photo: Photo): PhotoContentAnalysis {
         if (!localAvailable) return createFallbackAnalysis(photo)
 
         return try {
-            withTimeout(localTimeout) { gemmaAnalyzer.analyze(photo) }.also {
-                usedGemma = true
-                Log.d(TAG, "使用本地 Gemma 4 模型完成分析")
+            withTimeout(localTimeout) { qwenAnalyzer.analyze(photo) }.also {
+                usedQwen = true
+                Log.d(TAG, "使用本地 Qwen3.5 模型完成分析")
             }
         } catch (error: Exception) {
-            usedGemma = false
+            usedQwen = false
             when (error) {
                 is ModelInitializationException -> localAvailable = false
-                is TimeoutCancellationException -> Log.e(TAG, "Gemma 本地推理超时", error)
-                else -> Log.e(TAG, "Gemma 本地推理失败", error)
+                is TimeoutCancellationException -> Log.e(TAG, "Qwen3.5 本地推理超时", error)
+                else -> Log.e(TAG, "Qwen3.5 本地推理失败", error)
             }
             createFallbackAnalysis(photo)
         }
@@ -46,19 +46,19 @@ class HybridPhotoContentAnalyzer(
 
     fun resetAvailability() {
         localAvailable = true
-        usedGemma = false
+        usedQwen = false
     }
 
     fun getStatus(): AnalyzerStatus = AnalyzerStatus(
         localAvailable = localAvailable,
         cloudAvailable = false,
-        currentMode = if (usedGemma) "local-gemma-4" else "fallback-rules"
+        currentMode = if (usedQwen) "local-qwen3.5" else "fallback-rules"
     )
 
     suspend fun forceLocal(photo: Photo): PhotoContentAnalysis =
-        withTimeout(localTimeout) { gemmaAnalyzer.analyze(photo) }
+        withTimeout(localTimeout) { qwenAnalyzer.analyze(photo) }
 
-    fun release() = gemmaAnalyzer.release()
+    fun release() = qwenAnalyzer.release()
 
     private fun createFallbackAnalysis(photo: Photo): PhotoContentAnalysis {
         val isScreenshot = photo.fileName.lowercase().let {

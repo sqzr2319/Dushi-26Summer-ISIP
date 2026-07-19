@@ -78,7 +78,12 @@ class PhotoRepository(
      * 保存分析结果
      */
     suspend fun saveAnalysisResult(result: ImageAnalysisResult) = withContext(Dispatchers.IO) {
-        val photoEntity = photoDao.getPhotoByAssetId(result.photoId) ?: return@withContext
+        val photoEntity = photoDao.getPhotoByAssetId(result.photoId)
+        if (photoEntity == null) {
+            android.util.Log.w("PhotoRepo", "saveAnalysisResult: photo not found for assetId=${result.photoId}")
+            return@withContext
+        }
+        android.util.Log.d("PhotoRepo", "saveAnalysisResult: saving analysis for photoId=${result.photoId}, categories=${result.categories}")
         photoAiDao.insertPhotoAi(result.toEntity(photoEntity.id))
     }
 

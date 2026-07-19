@@ -195,7 +195,7 @@ class LlamaCppWrapper(
     }
 
     /**
-     * 初始化模型（旧 API，供 GemmaInferenceEngine 使用）
+     * 初始化模型（旧 API，供 QwenInferenceEngine 使用）
      */
     fun initialize(modelPath: String, mmProjPath: String?) {
         try {

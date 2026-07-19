@@ -548,9 +548,17 @@ Java_com_example_isip_data_ai_LlamaCppNative_nativeGenerateMultimodal(
         if (sp != std::string::npos) {
             ep = result.find("```", sp + 3);
             if (ep != std::string::npos) {
+                // 有配对的反引号，提取内部内容
                 std::string inner = result.substr(sp + 3, ep - sp - 3);
                 if (inner.substr(0, 4) == "json") inner = inner.substr(4);
                 result = inner;
+            } else {
+                // 没有配对的反引号，直接删掉开头的 ```json 或 ```
+                std::string prefix = result.substr(sp, 3);
+                result = result.substr(sp + 3);
+                if (result.substr(0, 4) == "json") result = result.substr(4);
+                // 跳过开头的换行
+                while (!result.empty() && (result[0] == '\n' || result[0] == '\r')) result.erase(result.begin());
             }
         }
         if (!result.empty() && result[0] == '`') {
