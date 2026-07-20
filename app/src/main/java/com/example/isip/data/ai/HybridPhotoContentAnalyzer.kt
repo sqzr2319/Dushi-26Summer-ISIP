@@ -2,6 +2,8 @@ package com.example.isip.data.ai
 
 import android.content.Context
 import android.util.Log
+import com.example.isip.data.AppSettingsRepository
+import com.example.isip.data.InferenceMode
 import com.example.isip.data.model.Photo
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -15,6 +17,7 @@ class HybridPhotoContentAnalyzer(
     private val localTimeout: Long = 180_000L  // 3 分钟（Qwen3.5 多模态约 75 秒）
 ) : PhotoContentAnalyzer {
 
+    private val settingsRepository = AppSettingsRepository(context)
     private val qwenAnalyzer = QwenPhotoContentAnalyzer(context)
     private var localAvailable = true
     private var usedQwen = false
@@ -26,6 +29,9 @@ class HybridPhotoContentAnalyzer(
         get() = if (usedQwen) qwenAnalyzer.modelVersion else "1.0"
 
     override suspend fun analyze(photo: Photo): PhotoContentAnalysis {
+        if (settingsRepository.read().inferenceMode == InferenceMode.RULES) {
+            return createFallbackAnalysis(photo)
+        }
         if (!localAvailable) return createFallbackAnalysis(photo)
 
         return try {

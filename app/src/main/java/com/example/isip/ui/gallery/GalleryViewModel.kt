@@ -39,6 +39,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
     private val dateFormatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    private var photosLoadInProgress = false
 
     fun onEvent(event: GalleryUiEvent) {
         when (event) {
@@ -68,9 +69,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (granted && (changed || _uiState.value.photos.isEmpty())) loadPhotos()
     }
 
-    private fun loadPhotos() {
+    private fun loadPhotos(isRefresh: Boolean = false) {
+        if (photosLoadInProgress) return
+        photosLoadInProgress = true
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = !isRefresh,
+                    isRefreshing = isRefresh,
+                    errorMessage = null
+                )
+            }
 
             try {
                 // 从 Repository 加载真实照片
@@ -94,16 +103,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.update {
                     it.copy(
                         photos = photoUiModels,
-                        isLoading = false
+                        isLoading = false,
+                        isRefreshing = false
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         errorMessage = "加载照片失败: ${e.message}"
                     )
                 }
+            } finally {
+                photosLoadInProgress = false
             }
         }
     }
@@ -116,7 +129,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun refreshPhotos() {
         if (_uiState.value.permissionGranted) {
-            loadPhotos()
+            loadPhotos(isRefresh = true)
         }
     }
 

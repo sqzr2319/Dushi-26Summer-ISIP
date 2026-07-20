@@ -12,6 +12,7 @@ data class GalleryUiState(
     val activeCategory: String = "全部",
     val analysisProgress: AnalysisProgressUi? = null,
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val pendingDeleteRequest: DeletePhotoSkill.DeleteRequest? = null,
     val selectionSummary: SummarizeSelectionSkill.SelectionSummary? = null
