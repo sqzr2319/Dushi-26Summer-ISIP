@@ -44,7 +44,6 @@ class AnalyzeImageSkill(
 
         val clip = runCatching { clipAnalyzer?.analyze(input.photo) }.getOrNull()
         val needsDetail = input.requireDetail || clip == null ||
-            clip.confidence !in input.detailConfidenceThreshold..1f ||
             clip.categories.any { it in DETAIL_CATEGORIES }
         val detail = when {
             input.requireDetail -> requireNotNull(detailAnalyzer) {
@@ -118,7 +117,7 @@ class AnalyzeImageSkill(
     """.trimMargin()
 
     companion object {
-        const val DEFAULT_DETAIL_THRESHOLD = 0.72f
+        const val DEFAULT_DETAIL_THRESHOLD = 0.40f
         private const val FALLBACK_CONFIDENCE = 0.2f
         private const val MAX_TERMS = 8
         private val DETAIL_CATEGORIES = setOf("截图", "文档", "票据", "证件", "银行卡")
