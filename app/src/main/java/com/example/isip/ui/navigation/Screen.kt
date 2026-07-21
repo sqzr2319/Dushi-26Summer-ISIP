@@ -11,6 +11,10 @@ sealed class Screen(val route: String) {
         fun createRoute(photoId: String) = "photo/$photoId"
     }
 
+    data class SmartAlbum(val albumId: Long? = null) : Screen("smart-album/{albumId}") {
+        fun createRoute(albumId: Long) = "smart-album/$albumId"
+    }
+
     data class Duplicate(val groupId: String = "{groupId}") : Screen("duplicate/$groupId") {
         fun createRoute(groupId: String) = "duplicate/$groupId"
     }

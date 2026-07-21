@@ -75,6 +75,41 @@ class MediaSkillsTest {
     }
 
     @Test
+    fun generateStrategyBuildsVisualSimilarGroupsBelowDuplicateThreshold() = runBlocking {
+        val skill = GenerateStrategySkill { _, _ ->
+            listOf(GenerateStrategySkill.SimilarPair("1", "2", 0.85f))
+        }
+
+        val plan = skill.execute(
+            GenerateStrategySkill.Input(
+                analyses = emptyList(),
+                photos = listOf(photo("1", 10), photo("2", 20))
+            )
+        )
+
+        assertTrue(plan.duplicates.isEmpty())
+        assertEquals(setOf("1", "2"), plan.similarPhotos.single().photoIds.toSet())
+        assertEquals(0.85f, plan.similarPhotos.single().similarity)
+    }
+
+    @Test
+    fun generateStrategyHidesVisualPairsBelowSimilarThreshold() = runBlocking {
+        val skill = GenerateStrategySkill { _, _ ->
+            listOf(GenerateStrategySkill.SimilarPair("1", "2", 0.84f))
+        }
+
+        val plan = skill.execute(
+            GenerateStrategySkill.Input(
+                analyses = emptyList(),
+                photos = listOf(photo("1", 10), photo("2", 20))
+            )
+        )
+
+        assertTrue(plan.duplicates.isEmpty())
+        assertTrue(plan.similarPhotos.isEmpty())
+    }
+
+    @Test
     fun generateStrategyKeepsStablePortsForCollaboratingSkills() = runBlocking {
         val skill = GenerateStrategySkill(
             semanticSearchSkillPort = GenerateStrategySkill.SemanticSearchSkillPort {

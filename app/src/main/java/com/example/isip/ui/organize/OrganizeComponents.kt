@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -25,14 +24,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.isip.ui.model.CategorySuggestion
 import com.example.isip.ui.model.DuplicateGroup
+import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.PrivacyAlert
 import com.example.isip.ui.model.PrivacySeverity
+
+@Composable
+fun PhotoPreviewRow(photos: List<PhotoUiModel>, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        photos.take(4).forEach { photo ->
+            AsyncImage(
+                model = photo.uri,
+                contentDescription = "照片预览",
+                modifier = Modifier.size(62.dp).clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
 
 @Composable
 fun CategorySuggestionCard(
@@ -49,70 +62,55 @@ fun CategorySuggestionCard(
             else MaterialTheme.colorScheme.surface
         )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(category.categoryName, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${category.photoCount} 张照片",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (category.description.isNotBlank()) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(category.categoryName, style = MaterialTheme.typography.titleSmall)
                     Text(
-                        category.description,
+                        "${category.photoCount} 张照片",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    if (category.description.isNotBlank()) {
+                        Text(
+                            category.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2
+                        )
+                    }
                 }
+                Checkbox(checked = isSelected, onCheckedChange = { onToggleSelection() })
             }
-            Checkbox(checked = isSelected, onCheckedChange = { onToggleSelection() })
+            if (category.photos.isNotEmpty()) PhotoPreviewRow(category.photos, Modifier.padding(top = 10.dp))
         }
     }
 }
 
 @Composable
-fun DuplicateGroupCard(
-    group: DuplicateGroup,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun DuplicateGroupCard(group: DuplicateGroup, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val exactContent = group.similarityScore >= 0.999f
+    val level = if (exactContent) "文件内容完全相同" else "高度重复"
     Card(modifier = modifier.fillMaxWidth(), onClick = onClick) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("发现 ${group.photos.size} 张相似照片", style = MaterialTheme.typography.titleSmall)
+                    Text("$level · ${group.photos.size} 张", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "相似度 ${(group.similarityScore * 100).toInt()}%",
+                        if (exactContent) "内容指纹一致 · 点击复核"
+                        else "视觉相似分数 ${formatSimilarityScore(group.similarityScore)} · 点击复核",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                Icon(Icons.Default.ChevronRight, contentDescription = "查看详情")
+                Icon(Icons.Default.ChevronRight, contentDescription = "复核")
             }
-            Row(
-                modifier = Modifier.padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                group.photos.take(4).forEach { photo ->
-                    AsyncImage(
-                        model = photo.uri,
-                        contentDescription = null,
-                        modifier = Modifier.size(62.dp).clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
+            PhotoPreviewRow(group.photos, Modifier.padding(top = 12.dp))
         }
     }
 }
+
+private fun formatSimilarityScore(score: Float): Int = (score.coerceIn(0f, 1f) * 100).toInt()
 
 @Composable
 fun PrivacyAlertCard(
@@ -135,41 +133,32 @@ fun PrivacyAlertCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(42.dp),
+                modifier = Modifier.size(48.dp),
                 color = severityColor.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = "隐私提醒",
-                    modifier = Modifier.padding(9.dp),
-                    tint = severityColor
-                )
+                if (alert.photo.uri.isNotBlank()) {
+                    AsyncImage(
+                        model = alert.photo.uri,
+                        contentDescription = "隐私照片",
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.padding(10.dp))
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(alert.alertType, style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        when (alert.severity) {
-                            PrivacySeverity.HIGH -> "高风险"
-                            PrivacySeverity.MEDIUM -> "中风险"
-                            PrivacySeverity.LOW -> "低风险"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = severityColor
-                    )
-                }
+                Text(alert.alertType, style = MaterialTheme.typography.titleSmall, color = severityColor)
                 Spacer(Modifier.height(4.dp))
                 Text(alert.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 Text(
-                    "拍摄于 ${alert.photo.takenAtText}",
+                    "仅提醒，不会自动处理 · ${alert.photo.takenAtText}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = "查看详情")
+            Icon(Icons.Default.ChevronRight, contentDescription = "查看照片")
         }
     }
 }

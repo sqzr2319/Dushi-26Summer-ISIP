@@ -103,7 +103,12 @@ class MobileClipEngine private constructor(
         photoIds: Set<String>,
         threshold: Float
     ): List<GenerateStrategySkill.SimilarPair> = withContext(Dispatchers.IO) {
-        val vectors = photoIds.mapNotNull { id -> readEmbedding(id)?.let { id to it } }
+        // 全量两两比较是 O(n²)，在真实相册中会造成长时间卡顿甚至被系统杀进程。
+        // 元数据重复检测仍覆盖全量照片；视觉向量只对一个有界集合做增强检测。
+        val vectors = photoIds.asSequence()
+            .mapNotNull { id -> readEmbedding(id)?.let { id to it } }
+            .take(MAX_VISUAL_DUPLICATE_SCAN)
+            .toList()
         buildList {
             for (first in vectors.indices) for (second in first + 1 until vectors.size) {
                 val similarity = cosine(vectors[first].second, vectors[second].second)
@@ -275,6 +280,7 @@ class MobileClipEngine private constructor(
 
     companion object {
         const val MODEL_NAME = "mobileclip-s2-litert"
+        private const val MAX_VISUAL_DUPLICATE_SCAN = 500
         const val MODEL_VERSION = "datacompdr"
         private const val IMAGE_MODEL = "mobileclip_image.tflite"
         private const val TEXT_MODEL = "mobileclip_text.tflite"
@@ -344,6 +350,9 @@ object MobileClipProvider {
     fun getOrNull(context: Context): MobileClipEngine? = instance ?: synchronized(this) {
         instance ?: MobileClipEngine.createOrNull(context)?.also { instance = it }
     }
+
+    /** 返回已加载实例，不在当前页面同步创建数百 MB 的解释器。 */
+    fun peekOrNull(): MobileClipEngine? = instance
 }
 
 /** OpenAI CLIP byte-level BPE tokenizer, compatible with MobileCLIP context length 77. */

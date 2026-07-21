@@ -15,7 +15,8 @@ class FindDuplicatesSkill(
 
     data class Input(
         val photos: List<Photo>,
-        val threshold: Float = DEFAULT_THRESHOLD
+        val threshold: Float = DEFAULT_THRESHOLD,
+        val contentHashes: Map<String, String> = emptyMap()
     )
 
     data class SimilarPair(
@@ -44,8 +45,9 @@ class FindDuplicatesSkill(
                     pair.firstPhotoId != pair.secondPhotoId && pair.similarity >= input.threshold
             }
             .map { it.copy(similarity = it.similarity.coerceIn(0f, 1f)) }
+        val hashPairs = exactContentPairs(photos, input.contentHashes)
         val fallbackPairs = exactMetadataPairs(photos)
-        val pairs = (embeddingPairs + fallbackPairs).distinctBy {
+        val pairs = (hashPairs + embeddingPairs + fallbackPairs).distinctBy {
             canonicalPairKey(it.firstPhotoId, it.secondPhotoId)
         }
         if (pairs.isEmpty()) return emptyList()
@@ -70,7 +72,8 @@ class FindDuplicatesSkill(
                 }
                 DuplicateGroup(
                     photoIds = photoIds.sorted(),
-                    similarity = groupPairs.maxOf { it.similarity },
+                    // 组内只要存在一条低于 100% 的连接，就不能把整个组标成内容完全相同。
+                    similarity = groupPairs.minOf { it.similarity },
                     recommendKeep = recommendKeep(photoIds, photoById)
                 )
             }
@@ -87,6 +90,22 @@ class FindDuplicatesSkill(
                 }
             }
         }
+    }
+
+    private fun exactContentPairs(
+        photos: List<Photo>,
+        contentHashes: Map<String, String>
+    ): List<SimilarPair> = buildList {
+        val knownIds = photos.map(Photo::id).toSet()
+        contentHashes.filterKeys { it in knownIds }
+            .filterValues(String::isNotBlank)
+            .entries.groupBy({ it.value }, { it.key })
+            .values.filter { it.size > 1 }
+            .forEach { ids ->
+                for (first in ids.indices) for (second in first + 1 until ids.size) {
+                    add(SimilarPair(ids[first], ids[second], CONTENT_EXACT_SCORE))
+                }
+            }
     }
 
     private fun canonicalPairKey(first: String, second: String): String =
@@ -110,7 +129,7 @@ class FindDuplicatesSkill(
         |
         |## 输入参数
         |- photo_ids (Array<String>, 可选): 待检测范围
-        |- threshold (Float, 可选): CLIP 重复阈值，默认 0.94
+        |- threshold (Float, 可选): CLIP 高度重复阈值，默认 0.94
         |
         |## 输出
         |DuplicateGroup[]：photoIds、similarity、recommendKeep。
@@ -118,6 +137,7 @@ class FindDuplicatesSkill(
 
     companion object {
         const val DEFAULT_THRESHOLD = 0.94f
+        private const val CONTENT_EXACT_SCORE = 1f
         private const val METADATA_EXACT_SCORE = 0.99f
     }
 }
