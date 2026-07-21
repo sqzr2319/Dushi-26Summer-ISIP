@@ -13,6 +13,7 @@ import com.example.isip.ui.organize.OrganizeScreen
 import com.example.isip.ui.settings.SettingsScreen
 import com.example.isip.ui.photo.PhotoDetailScreen
 import com.example.isip.ui.navigation.Screen
+import com.example.isip.ui.smartalbum.SmartAlbumScreen
 
 @Composable
 fun MainNavHost(
@@ -29,8 +30,11 @@ fun MainNavHost(
                 onPhotoClick = { photoId ->
                     navController.navigate(Screen.PhotoDetail().createRoute(photoId))
                 },
-                onAnalysisClick = {
-                    navController.navigate(Screen.Analysis.route)
+                onSmartAlbumClick = { albumId ->
+                    navController.navigate(Screen.SmartAlbum().createRoute(albumId))
+                },
+                onCreateSmartAlbumClick = {
+                    navController.navigate(Screen.Organize.route) { launchSingleTop = true }
                 }
             )
         }
@@ -47,12 +51,6 @@ fun MainNavHost(
             OrganizeScreen(
                 onPhotoClick = { photoId ->
                     navController.navigate(Screen.PhotoDetail().createRoute(photoId))
-                },
-                onDuplicateGroupClick = { groupId ->
-                    navController.navigate(Screen.Duplicate().createRoute(groupId))
-                },
-                onPrivacyAlertClick = { alertId ->
-                    navController.navigate(Screen.Privacy().createRoute(alertId))
                 }
             )
         }
@@ -69,6 +67,20 @@ fun MainNavHost(
             PhotoDetailScreen(
                 photoId = photoId,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "smart-album/{albumId}",
+            arguments = listOf(navArgument("albumId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
+            SmartAlbumScreen(
+                albumId = albumId,
+                onNavigateBack = { navController.popBackStack() },
+                onPhotoClick = { photoId ->
+                    navController.navigate(Screen.PhotoDetail().createRoute(photoId))
+                }
             )
         }
 

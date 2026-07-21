@@ -2,12 +2,14 @@ package com.example.isip.ui.gallery
 
 import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.AnalysisProgressUi
+import com.example.isip.ui.model.SmartAlbumUiModel
 import com.example.isip.domain.skill.DeletePhotoSkill
 import com.example.isip.domain.skill.SummarizeSelectionSkill
 
 data class GalleryUiState(
     val permissionGranted: Boolean = false,
     val photos: List<PhotoUiModel> = emptyList(),
+    val smartAlbums: List<SmartAlbumUiModel> = emptyList(),
     val selectedPhotoIds: Set<String> = emptySet(),
     val activeCategory: String = "全部",
     val analysisProgress: AnalysisProgressUi? = null,

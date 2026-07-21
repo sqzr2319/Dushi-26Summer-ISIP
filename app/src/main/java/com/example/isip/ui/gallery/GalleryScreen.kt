@@ -47,7 +47,8 @@ import com.example.isip.ui.common.PermissionRequestContent
 @Composable
 fun GalleryScreen(
     onPhotoClick: (String) -> Unit,
-    onAnalysisClick: () -> Unit,
+    onSmartAlbumClick: (Long) -> Unit,
+    onCreateSmartAlbumClick: () -> Unit,
     viewModel: GalleryViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -91,7 +92,9 @@ fun GalleryScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.onEvent(GalleryUiEvent.PermissionResult(hasPhotoPermission()))
+        val granted = hasPhotoPermission()
+        viewModel.onEvent(GalleryUiEvent.PermissionResult(granted))
+        if (granted) viewModel.refreshPhotos()
     }
 
     LaunchedEffect(uiState.pendingDeleteRequest) {
@@ -134,7 +137,7 @@ fun GalleryScreen(
                     title = { Text("相册") },
                     actions = {
                         IconButton(
-                            onClick = onAnalysisClick,
+                            onClick = { viewModel.onEvent(GalleryUiEvent.StartAnalysis) },
                             enabled = uiState.analysisProgress == null
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = "开始分析")
@@ -164,6 +167,11 @@ fun GalleryScreen(
                     description = "设备相册中还没有可查看的照片"
                 )
                 else -> Column(modifier = Modifier.fillMaxSize()) {
+                    SmartAlbumSection(
+                        albums = uiState.smartAlbums,
+                        onAlbumClick = onSmartAlbumClick,
+                        onCreateClick = onCreateSmartAlbumClick
+                    )
                     CategoryFilterRow(
                         categories = listOf("全部", "人物", "风景", "截图", "文档"),
                         selectedCategory = uiState.activeCategory,

@@ -30,10 +30,12 @@ class OrganizePhotosUseCase(
 
         val selectedIds = photos.map(Photo::id).toSet()
         val analyses = photoRepository.getAllAnalysisResults().filter { it.photoId in selectedIds }
+        val contentHashes = photoRepository.getOrCreateContentHashes(photos)
         return strategySkill.execute(
             GenerateStrategySkill.Input(
                 analyses = analyses,
-                photos = photos
+                photos = photos,
+                contentHashes = contentHashes
             )
         )
     }

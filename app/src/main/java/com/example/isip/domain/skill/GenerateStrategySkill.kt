@@ -27,6 +27,7 @@ class GenerateStrategySkill(
     data class Input(
         val analyses: List<ImageAnalysisResult>,
         val photos: List<Photo> = emptyList(),
+        val contentHashes: Map<String, String> = emptyMap(),
         val duplicateThreshold: Float = DEFAULT_DUPLICATE_THRESHOLD,
         val minimumAlbumSize: Int = DEFAULT_MINIMUM_ALBUM_SIZE
     )
@@ -108,8 +109,8 @@ class GenerateStrategySkill(
         val context = baseContext.copy(analyses = enrichedAnalyses)
         val semanticGroups = loadSemanticGroups(context, knownIds)
         val albums = loadAlbumCandidates(context, semanticGroups, knownIds)
-        val duplicates = loadDuplicates(context, photoById, knownIds)
-        val similarPhotos = loadSimilarPhotos(context, knownIds)
+        val duplicates = loadDuplicates(context, photoById, knownIds, input.contentHashes)
+        val similarPhotos = loadSimilarPhotos(context, knownIds, duplicates)
         val privacyRisks = enrichedAnalyses.flatMap(::detectPrivacy)
             .distinctBy { it.photoId to it.privacyType }
         val suggestions = buildSuggestions(
@@ -174,10 +175,13 @@ class GenerateStrategySkill(
     private suspend fun loadDuplicates(
         context: StrategyContext,
         photos: Map<String, Photo>,
-        knownIds: Set<String>
+        knownIds: Set<String>,
+        contentHashes: Map<String, String>
     ): List<DuplicateGroup> {
         val external = runCatching { findDuplicatesSkillPort?.findDuplicates(context) }.getOrNull()
-        val candidates = external ?: buildClipDuplicates(knownIds, photos, context.duplicateThreshold)
+        val candidates = external ?: buildClipDuplicates(
+            knownIds, photos, context.duplicateThreshold, contentHashes
+        )
         return candidates.mapNotNull { group ->
             val ids = group.photoIds.filter { it in knownIds }.distinct()
             if (ids.size < 2 || group.similarity !in context.duplicateThreshold..1f) null else group.copy(
@@ -191,16 +195,21 @@ class GenerateStrategySkill(
 
     private suspend fun loadSimilarPhotos(
         context: StrategyContext,
-        knownIds: Set<String>
-    ): List<SimilarPhotoGroup> = runCatching {
-        findSimilarPhotosSkillPort?.findSimilarPhotos(context).orEmpty()
-    }.getOrDefault(emptyList()).mapNotNull { group ->
+        knownIds: Set<String>,
+        duplicates: List<DuplicateGroup>
+    ): List<SimilarPhotoGroup> {
+        val external = runCatching {
+            findSimilarPhotosSkillPort?.findSimilarPhotos(context)
+        }.getOrNull()
+        val groups = external ?: buildClipSimilarPhotos(context, knownIds, duplicates)
+        return groups.mapNotNull { group ->
         val ids = group.photoIds.filter { it in knownIds }.distinct()
         if (ids.size < 2 || group.similarity !in 0f..1f) null else group.copy(
             photoIds = ids,
             similarity = group.similarity.coerceIn(0f, 1f)
         )
-    }.distinctBy { it.photoIds.toSet() }
+        }.distinctBy { it.photoIds.toSet() }
+    }
 
     private fun buildCategoryGroups(analyses: List<ImageAnalysisResult>): List<SemanticGroup> =
         analyses.flatMap { analysis ->
@@ -226,7 +235,8 @@ class GenerateStrategySkill(
     private suspend fun buildClipDuplicates(
         ids: Set<String>,
         photos: Map<String, Photo>,
-        threshold: Float
+        threshold: Float,
+        contentHashes: Map<String, String>
     ): List<DuplicateGroup> = FindDuplicatesSkill(
         FindDuplicatesSkill.SimilarityEngine { photoIds, requestedThreshold ->
             clipSimilarityEngine?.findSimilar(photoIds, requestedThreshold).orEmpty().map { pair ->
@@ -240,9 +250,50 @@ class GenerateStrategySkill(
     ).execute(
         FindDuplicatesSkill.Input(
             photos = ids.mapNotNull(photos::get),
-            threshold = threshold
+            threshold = threshold,
+            contentHashes = contentHashes
         )
     )
+
+    private suspend fun buildClipSimilarPhotos(
+        context: StrategyContext,
+        ids: Set<String>,
+        duplicates: List<DuplicateGroup>
+    ): List<SimilarPhotoGroup> {
+        val engine = clipSimilarityEngine ?: return emptyList()
+        val duplicateSets = duplicates.map { it.photoIds.toSet() }
+        val pairs = engine.findSimilar(ids, DEFAULT_SIMILAR_THRESHOLD)
+            .filter { pair ->
+                pair.similarity >= DEFAULT_SIMILAR_THRESHOLD &&
+                    pair.similarity < context.duplicateThreshold &&
+                    duplicateSets.none { pair.firstPhotoId in it && pair.secondPhotoId in it }
+            }
+        if (pairs.isEmpty()) return emptyList()
+
+        val parent = ids.associateWith { it }.toMutableMap()
+        fun root(id: String): String {
+            var current = id
+            while (parent.getValue(current) != current) current = parent.getValue(current)
+            return current
+        }
+        pairs.forEach { pair ->
+            val first = root(pair.firstPhotoId)
+            val second = root(pair.secondPhotoId)
+            if (first != second) parent[second] = first
+        }
+        return ids.groupBy(::root).values.filter { it.size > 1 }.map { photoIds ->
+            val groupPairs = pairs.filter {
+                it.firstPhotoId in photoIds && it.secondPhotoId in photoIds
+            }
+            val sortedIds = photoIds.sorted()
+            SimilarPhotoGroup(
+                id = "clip_similar_${sortedIds.joinToString("_").hashCode().toUInt().toString(16)}",
+                photoIds = sortedIds,
+                similarity = groupPairs.map { it.similarity }.average().toFloat().coerceIn(0f, 1f),
+                reason = "明显相似，通常是连拍或同一场景，需人工比较"
+            )
+        }.sortedByDescending(SimilarPhotoGroup::similarity)
+    }
 
     private fun detectPrivacy(result: ImageAnalysisResult): List<PrivacyAlert> {
         val text = (result.categories + result.tags + result.ocrText).joinToString(" ")
@@ -284,6 +335,7 @@ class GenerateStrategySkill(
 
     companion object {
         const val DEFAULT_DUPLICATE_THRESHOLD = 0.94f
+        const val DEFAULT_SIMILAR_THRESHOLD = 0.85f
         const val DEFAULT_MINIMUM_ALBUM_SIZE = 2
         private const val MAX_TAGS_PER_PHOTO = 8
         private val GENERIC_CATEGORIES = setOf("照片", "其他", "横向照片", "竖向照片")

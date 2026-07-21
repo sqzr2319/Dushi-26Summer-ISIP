@@ -35,10 +35,16 @@ interface PhotoDao {
         photos.chunked(MAX_ASSET_IDS_PER_BATCH).forEach { batch ->
             insertPhotosIgnoringExisting(batch)
 
-            val existingIds = getPhotosByAssetIds(batch.map { it.assetId })
-                .associate { it.assetId to it.id }
+            val existingByAssetId = getPhotosByAssetIds(batch.map { it.assetId })
+                .associateBy { it.assetId }
             updatePhotos(batch.map { photo ->
-                photo.copy(id = checkNotNull(existingIds[photo.assetId]))
+                val existing = checkNotNull(existingByAssetId[photo.assetId])
+                photo.copy(
+                    id = existing.id,
+                    contentHash = existing.contentHash.takeIf {
+                        existing.fileSize == photo.fileSize && existing.modifiedAt == photo.modifiedAt
+                    }
+                )
             })
         }
     }
@@ -54,6 +60,9 @@ interface PhotoDao {
 
     @Query("SELECT COUNT(*) FROM photos")
     suspend fun getPhotoCount(): Int
+
+    @Query("UPDATE photos SET content_hash = :contentHash WHERE asset_id = :assetId")
+    suspend fun updateContentHash(assetId: String, contentHash: String)
 
     @Query("DELETE FROM photos WHERE id = :photoId")
     suspend fun deletePhoto(photoId: Long)

@@ -112,6 +112,40 @@ class AdditionalSkillsTest {
     }
 
     @Test
+    fun `duplicate skill detects renamed files by content hash`() = runBlocking {
+        val groups = FindDuplicatesSkill().execute(
+            FindDuplicatesSkill.Input(
+                photos = listOf(
+                    photo("original", width = 100, height = 100, size = 20),
+                    photo("renamed-copy", width = 100, height = 100, size = 20)
+                ),
+                contentHashes = mapOf("original" to "same-sha256", "renamed-copy" to "same-sha256")
+            )
+        )
+
+        assertEquals(setOf("original", "renamed-copy"), groups.single().photoIds.toSet())
+        assertEquals(1f, groups.single().similarity)
+    }
+
+    @Test
+    fun `mixed exact and visual duplicate group is not labeled exact`() = runBlocking {
+        val skill = FindDuplicatesSkill(
+            FindDuplicatesSkill.SimilarityEngine { _, _ ->
+                listOf(FindDuplicatesSkill.SimilarPair("copy", "resaved", 0.95f))
+            }
+        )
+        val group = skill.execute(
+            FindDuplicatesSkill.Input(
+                photos = listOf(photo("original"), photo("copy"), photo("resaved")),
+                contentHashes = mapOf("original" to "same", "copy" to "same", "resaved" to "different")
+            )
+        ).single()
+
+        assertEquals(setOf("original", "copy", "resaved"), group.photoIds.toSet())
+        assertEquals(0.95f, group.similarity)
+    }
+
+    @Test
     fun `find similar photos excludes target and caps results`() = runBlocking {
         val skill = FindSimilarPhotosSkill(
             FindSimilarPhotosSkill.SimilarityEngine { target, candidates, _ ->

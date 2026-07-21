@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import java.security.MessageDigest
 
 /**
  * 相册数据仓库（使用 Room 数据库保存索引与分析结果）
@@ -49,6 +50,37 @@ class PhotoRepository(
     suspend fun getPhotoCount(): Int = withContext(Dispatchers.IO) {
         photoDao.getPhotoCount()
     }
+
+    /**
+     * 为可能相同的文件计算 SHA-256。先按文件大小筛选，只读取至少有两个同尺寸文件的
+     * 候选；结果缓存在 Room 中，后续整理不会重复读取整张照片。
+     */
+    suspend fun getOrCreateContentHashes(photos: List<Photo>): Map<String, String> =
+        withContext(Dispatchers.IO) {
+            val candidates = photos.distinctBy(Photo::id)
+                .groupBy(Photo::sizeBytes)
+                .filterKeys { it > 0L }
+                .values
+                .filter { it.size > 1 }
+                .flatten()
+            if (candidates.isEmpty()) return@withContext emptyMap()
+
+            val existing = photoDao.getPhotosByAssetIds(candidates.map(Photo::id))
+                .associateBy { it.assetId }
+            buildMap {
+                candidates.forEach { photo ->
+                    val cached = existing[photo.id]?.contentHash
+                    if (!cached.isNullOrBlank()) {
+                        put(photo.id, cached)
+                        return@forEach
+                    }
+                    val hash = runCatching { sha256(getPhotoUri(photo.id)) }.getOrNull()
+                        ?: return@forEach
+                    photoDao.updateContentHash(photo.id, hash)
+                    put(photo.id, hash)
+                }
+            }
+        }
 
     /**
      * 获取最近N张照片
@@ -196,6 +228,19 @@ class PhotoRepository(
             normalized = value.lowercase(),
             display = "#$value"
         )
+    }
+
+    private fun sha256(uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(HASH_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (count > 0) digest.update(buffer, 0, count)
+            }
+        } ?: error("无法读取照片内容")
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun ImageAnalysisResult.withManualTags(manualTags: List<String>): ImageAnalysisResult = copy(
@@ -452,6 +497,7 @@ class PhotoRepository(
     companion object {
         private const val MANUAL_TAG_CONFIDENCE = 1f
         private const val MANUAL_TAG_MODEL = "manual-tags"
+        private const val HASH_BUFFER_SIZE = 64 * 1024
 
         @Volatile
         private var INSTANCE: PhotoRepository? = null

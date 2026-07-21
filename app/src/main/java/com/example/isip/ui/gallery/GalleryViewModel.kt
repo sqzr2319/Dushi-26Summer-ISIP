@@ -15,8 +15,10 @@ import com.example.isip.data.media.MediaStorePhotoDeletionGateway
 import com.example.isip.domain.skill.DeletePhotoSkill
 import com.example.isip.domain.skill.SummarizeSelectionSkill
 import com.example.isip.domain.usecase.AnalyzePhotosUseCase
+import com.example.isip.domain.usecase.SmartAlbumUseCase
 import com.example.isip.ui.model.PhotoUiModel
 import com.example.isip.ui.model.AnalysisProgressUi
+import com.example.isip.ui.model.SmartAlbumUiModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -29,6 +31,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val mediaStoreDeletionGateway = MediaStorePhotoDeletionGateway(application, repository)
     private val deletePhotoSkill = DeletePhotoSkill(mediaStoreDeletionGateway)
     private val summarizeSelectionSkill = SummarizeSelectionSkill()
+    private val smartAlbumUseCase = SmartAlbumUseCase(repository)
     private val analyzeUseCase = AnalyzePhotosUseCase(
         repository,
         HybridPhotoContentAnalyzer(application),
@@ -85,9 +88,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // 从 Repository 加载真实照片
                 val photos = repository.getAllPhotos()
 
+                val analysisByPhotoId = repository.getAllAnalysisResults().associateBy { it.photoId }
+
                 // 转换为 UI 模型
                 val photoUiModels = photos.map { photo ->
-                    val analysisResult = repository.getAnalysisResult(photo.id)
+                    val analysisResult = analysisByPhotoId[photo.id]
 
                     PhotoUiModel(
                         id = photo.id,
@@ -99,10 +104,31 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         isAnalyzed = analysisResult != null
                     )
                 }
+                val photoUiById = photoUiModels.associateBy(PhotoUiModel::id)
+                val smartAlbums = smartAlbumUseCase.getAll().map { album ->
+                    val matchedPhotos = smartAlbumUseCase.resolvePhotos(album)
+                    SmartAlbumUiModel(
+                        id = album.id,
+                        name = album.name,
+                        photos = matchedPhotos.take(SMART_ALBUM_COVER_LIMIT)
+                            .mapNotNull { photoUiById[it.id] },
+                        photoCount = matchedPhotos.size,
+                        ruleDescription = buildList {
+                            if (album.rule.categories.isNotEmpty()) {
+                                add("分类：${album.rule.categories.joinToString("、")}")
+                            }
+                            if (album.rule.tags.isNotEmpty()) {
+                                add("标签：${album.rule.tags.joinToString("、")}")
+                            }
+                            if (album.rule.photoIds.isNotEmpty()) add("包含已选照片")
+                        }.joinToString(" · ").ifBlank { "自定义规则" }
+                    )
+                }
 
                 _uiState.update {
                     it.copy(
                         photos = photoUiModels,
+                        smartAlbums = smartAlbums,
                         isLoading = false,
                         isRefreshing = false
                     )
@@ -271,5 +297,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             "全部" -> state.photos
             else -> state.photos.filter { state.activeCategory in it.categories }
         }
+    }
+
+    private companion object {
+        const val SMART_ALBUM_COVER_LIMIT = 4
     }
 }
