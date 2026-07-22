@@ -108,8 +108,8 @@ class QwenInferenceEngine private constructor(
         try {
             Log.d(TAG, "分析图像: ${bitmap.width}x${bitmap.height}")
 
-            // Bitmap → ByteArray (JPEG, 缩放至 640px 防止 OOM)
-            val maxSize = 640
+            // Bitmap → ByteArray (JPEG, 缩放至 384px 加速推理)
+            val maxSize = 384
             val scale = minOf(
                 maxSize.toFloat() / bitmap.width,
                 maxSize.toFloat() / bitmap.height
@@ -130,6 +130,8 @@ class QwenInferenceEngine private constructor(
 
             Log.d(TAG, "图片已缩放: ${scaledBitmap.width}x${scaledBitmap.height}, ${imageBytes.size / 1024} KB")
 
+            val startTime = System.currentTimeMillis()
+
             // 使用 suspendCoroutine 桥接 callback → suspend
             val response = suspendCoroutine<String> { cont ->
                 wrapper.generateMultimodal(
@@ -142,7 +144,8 @@ class QwenInferenceEngine private constructor(
                 }
             }
 
-            Log.d(TAG, "收到响应长度: ${response.length}")
+            val elapsed = System.currentTimeMillis() - startTime
+            Log.d(TAG, "收到响应长度: ${response.length} (耗时 ${elapsed / 1000}s)")
             Log.d(TAG, "响应前200字符: ${response.take(200)}")
 
             // 解析 JSON 响应
