@@ -17,6 +17,8 @@ class SemanticSearchSkill(
     data class Input(
         val query: String,
         val analyses: List<ImageAnalysisResult>,
+        /** All media eligible for CLIP search, including items without OCR/tag rows. */
+        val candidatePhotoIds: Set<String> = analyses.mapTo(linkedSetOf()) { it.photoId },
         val topK: Int = DEFAULT_TOP_K,
         val minRelevance: Float = DEFAULT_MIN_RELEVANCE
     )
@@ -33,37 +35,45 @@ class SemanticSearchSkill(
         require(query.isNotEmpty()) { "query 不能为空" }
         require(input.topK > 0) { "topK 必须大于 0" }
         require(input.minRelevance in 0f..1f) { "minRelevance 必须在 0..1 之间" }
-        if (input.analyses.isEmpty()) return SearchResult(query, emptyList(), 0)
-
         val analyses = input.analyses.groupBy(ImageAnalysisResult::photoId)
             .mapValues { (_, values) -> values.maxBy(ImageAnalysisResult::analyzedAt) }
+        // CLIP vectors can be ready before optional OCR/tag analysis.  Therefore the
+        // semantic candidate set is the full media library, not only `analyses`.
+        val candidatePhotoIds = if (clipSearchEngine != null) {
+            input.candidatePhotoIds.ifEmpty { analyses.keys }
+        } else {
+            analyses.keys
+        }
+        if (candidatePhotoIds.isEmpty()) return SearchResult(query, emptyList(), 0)
+
         val terms = tokenize(query)
         val localMatches = analyses.mapValues { (_, analysis) -> localMatch(analysis, terms) }
         val clipMatches = runCatching {
             clipSearchEngine?.search(
                 query = query,
-                candidatePhotoIds = analyses.keys,
+                candidatePhotoIds = candidatePhotoIds,
                 limit = (input.topK * CANDIDATE_MULTIPLIER).coerceAtMost(MAX_CLIP_CANDIDATES)
             ).orEmpty()
         }.getOrDefault(emptyList())
             .asSequence()
-            .filter { it.photoId in analyses }
+            .filter { it.photoId in candidatePhotoIds }
             .groupBy(SearchPhotosSkill.ClipMatch::photoId)
             .mapValues { (_, matches) -> matches.maxBy(SearchPhotosSkill.ClipMatch::relevanceScore) }
 
-        val ranked = analyses.values.mapNotNull { analysis ->
-            val local = localMatches.getValue(analysis.photoId)
-            val clip = clipMatches[analysis.photoId]
+        val ranked = candidatePhotoIds.mapNotNull { photoId ->
+            val analysis = analyses[photoId]
+            val local = analysis?.let { localMatches.getValue(photoId) } ?: EMPTY_LOCAL_MATCH
+            val clip = clipMatches[photoId]
             val score = fuse(clip?.relevanceScore, local.tagScore, local.textScore)
             if (score < input.minRelevance) return@mapNotNull null
 
             SearchItem(
-                photoId = analysis.photoId,
+                photoId = photoId,
                 relevanceScore = score,
                 matchedTags = local.matchedTags,
                 matchedText = local.matchedText.ifBlank {
                     clip?.explanation?.takeIf(String::isNotBlank)
-                        ?: analysis.description.ifBlank { analysis.ocrText }
+                        ?: analysis?.description?.ifBlank { analysis.ocrText }.orEmpty()
                 }
             )
         }.sortedWith(compareByDescending<SearchItem>(SearchItem::relevanceScore).thenBy(SearchItem::photoId))
@@ -145,6 +155,7 @@ class SemanticSearchSkill(
     """.trimMargin()
 
     private companion object {
+        val EMPTY_LOCAL_MATCH = LocalMatch(0f, 0f, emptyList(), "")
         const val DEFAULT_TOP_K = 20
         const val DEFAULT_MIN_RELEVANCE = 0.1f
         const val CLIP_WEIGHT = 0.70f

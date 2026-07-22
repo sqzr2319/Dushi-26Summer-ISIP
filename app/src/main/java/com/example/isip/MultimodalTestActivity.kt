@@ -134,8 +134,8 @@ class MultimodalTestActivity : ComponentActivity() {
             try {
                 llamaWrapper = LlamaCppWrapper(applicationContext)
                 val modelsDir = filesDir.resolve("models")
-                val modelPath = modelsDir.resolve("Qwen3.5-2B_Q4_K_M.gguf").absolutePath
-                val mmprojPath = modelsDir.resolve("Qwen3.5-2B.mmproj-f16.gguf").absolutePath
+                val modelPath = modelsDir.resolve("Qwen3.5-4B-Q4_K_M.gguf").absolutePath
+                val mmprojPath = modelsDir.resolve("mmproj-F16.gguf").absolutePath
                 
                 val success = withContext(Dispatchers.IO) {
                     llamaWrapper?.loadModel(modelPath, mmprojPath) ?: false

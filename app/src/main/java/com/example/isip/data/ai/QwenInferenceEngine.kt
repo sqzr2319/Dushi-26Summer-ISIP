@@ -20,14 +20,11 @@ import kotlin.coroutines.suspendCoroutine
  * 支持纯文本和多模态（图片 + 文本）推理。
  *
  * 模型要求：
- * - Qwen3.5-2B_Q4_K_M.gguf (主模型)
- * - Qwen3.5-2B.mmproj-f16.gguf (多模态投影层)
+ * - Qwen3.5-4B-Q4_K_M.gguf (主模型)
+ * - mmproj-F16.gguf (多模态投影层)
  *
  * 模型需预先部署到 /data/data/com.example.isip/files/models/
  * 参见 tools/setup_models.ps1
- * 模型要求：
- * - gemma-4-E2B_q4_0-it.gguf (主模型)
- * - gemma-4-E2B-it-mmproj.gguf (多模态投影层)
  */
 class QwenInferenceEngine private constructor(
     private val context: Context,

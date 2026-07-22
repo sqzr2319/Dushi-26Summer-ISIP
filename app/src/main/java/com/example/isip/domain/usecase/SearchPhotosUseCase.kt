@@ -20,12 +20,19 @@ class SearchPhotosUseCase(
      */
     suspend fun search(query: String): SearchResult {
         val analyses = photoRepository.getAllAnalysisResults()
-
-        return semanticSearchSkill?.execute(
-            SemanticSearchSkill.Input(query = query, analyses = analyses)
-        ) ?: searchSkill.execute(
-            SearchPhotosSkill.Input(query = query, analyses = analyses)
-        )
+        val semantic = semanticSearchSkill
+        return if (semantic != null) {
+            // Scan the media library only for CLIP search.  Keyword fallback still
+            // works exclusively from persisted analysis rows.
+            val candidatePhotoIds = photoRepository.getAllPhotos().mapTo(linkedSetOf()) { it.id }
+            semantic.execute(SemanticSearchSkill.Input(
+                query = query,
+                analyses = analyses,
+                candidatePhotoIds = candidatePhotoIds
+            ))
+        } else {
+            searchSkill.execute(SearchPhotosSkill.Input(query = query, analyses = analyses))
+        }
     }
 
     /**

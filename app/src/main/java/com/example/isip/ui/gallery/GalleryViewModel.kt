@@ -26,7 +26,7 @@ import java.util.Locale
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
     // 初始化 Repository 和 UseCase
-    // 使用本地 Gemma 4；模型不可用时仅返回基础分类，不调用云端模型。
+    // 使用本地 Qwen3.5；模型不可用时仅返回基础分类，不调用云端模型。
     private val repository = PhotoRepository.getInstance(application)
     private val mediaStoreDeletionGateway = MediaStorePhotoDeletionGateway(application, repository)
     private val deletePhotoSkill = DeletePhotoSkill(mediaStoreDeletionGateway)

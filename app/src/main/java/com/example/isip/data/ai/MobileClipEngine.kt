@@ -12,6 +12,8 @@ import com.example.isip.domain.skill.FindSimilarPhotosSkill
 import com.example.isip.domain.skill.GenerateStrategySkill
 import com.example.isip.domain.skill.SearchPhotosSkill
 import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -51,8 +53,7 @@ class MobileClipEngine private constructor(
     private val imageInterpreter = Interpreter(File(modelDir, IMAGE_MODEL))
     private val textInterpreter = Interpreter(File(modelDir, TEXT_MODEL))
     private val tokenizer = ClipBpeTokenizer(
-        vocabFile = File(modelDir, VOCAB_FILE),
-        mergesFile = File(modelDir, MERGES_FILE),
+        tokenizerFile = File(modelDir, TOKENIZER_FILE),
         contextLength = textInterpreter.getInputTensor(0).shape().last()
     )
     private val embeddingDir = File(modelDir, EMBEDDING_DIR).apply { mkdirs() }
@@ -282,10 +283,9 @@ class MobileClipEngine private constructor(
         const val MODEL_NAME = "mobileclip-s2-litert"
         private const val MAX_VISUAL_DUPLICATE_SCAN = 500
         const val MODEL_VERSION = "datacompdr"
-        private const val IMAGE_MODEL = "mobileclip_image.tflite"
-        private const val TEXT_MODEL = "mobileclip_text.tflite"
-        private const val VOCAB_FILE = "vocab.json"
-        private const val MERGES_FILE = "merges.txt"
+        private const val IMAGE_MODEL = "mobileclip_s2_image.tflite"
+        private const val TEXT_MODEL = "mobileclip_s2_text.tflite"
+        private const val TOKENIZER_FILE = "tokenizer.json"
         private const val EMBEDDING_DIR = "embeddings"
         private const val MAX_EMBEDDING_SIZE = 4096
         private const val LOGIT_SCALE = 20f
@@ -309,7 +309,7 @@ class MobileClipEngine private constructor(
 
         fun createOrNull(context: Context): MobileClipEngine? {
             val dir = File(context.filesDir, "clip")
-            val required = listOf(IMAGE_MODEL, TEXT_MODEL, VOCAB_FILE, MERGES_FILE)
+            val required = listOf(IMAGE_MODEL, TEXT_MODEL, TOKENIZER_FILE)
             return if (required.all { File(dir, it).isFile }) MobileClipEngine(context, dir) else null
         }
 
@@ -357,15 +357,17 @@ object MobileClipProvider {
 
 /** OpenAI CLIP byte-level BPE tokenizer, compatible with MobileCLIP context length 77. */
 internal class ClipBpeTokenizer(
-    vocabFile: File,
-    mergesFile: File,
+    tokenizerFile: File,
     private val contextLength: Int
 ) {
+    private val model: JsonObject = tokenizerFile.reader().use { reader ->
+        JsonParser.parseReader(reader).asJsonObject.getAsJsonObject("model")
+    }
     private val vocab: Map<String, Int> = Gson().fromJson(
-        vocabFile.readText(), object : TypeToken<Map<String, Int>>() {}.type
+        model.get("vocab"), object : TypeToken<Map<String, Int>>() {}.type
     )
-    private val ranks = mergesFile.readLines().asSequence().filterNot { it.startsWith("#") }
-        .map(String::trim).filter(String::isNotEmpty).mapIndexedNotNull { index, line ->
+    private val ranks = model.getAsJsonArray("merges").asSequence()
+        .map { it.asString.trim() }.filter(String::isNotEmpty).mapIndexedNotNull { index, line ->
             val parts = line.split(' ')
             if (parts.size == 2) (parts[0] to parts[1]) to index else null
         }.toMap()

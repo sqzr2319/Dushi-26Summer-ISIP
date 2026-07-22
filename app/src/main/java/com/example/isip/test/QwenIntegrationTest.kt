@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 测试 Gemma 4 模型集成的示例代码
+ * 测试 Qwen3.5 模型集成的示例代码
  *
  * 用法：
  * 1. 在 MainActivity 中调用 testModelLoading()
@@ -31,7 +31,7 @@ class QwenIntegrationTest {
         fun testModelLoading(activity: ComponentActivity) {
             activity.lifecycleScope.launch {
                 try {
-                    Log.i(TAG, "=== 开始测试 Gemma 4 模型集成 ===")
+                    Log.i(TAG, "=== 开始测试 Qwen3.5 模型集成 ===")
 
                     // 1. 检查模型文件
                     Log.i(TAG, "1. 检查模型文件...")
@@ -91,7 +91,7 @@ class QwenIntegrationTest {
 
                     testBitmap.recycle()
 
-                    Log.i(TAG, "=== Gemma 4 模型集成测试完成 ===")
+                    Log.i(TAG, "=== Qwen3.5 模型集成测试完成 ===")
                     Log.i(TAG, "✅ 所有测试通过")
 
                 } catch (e: Exception) {

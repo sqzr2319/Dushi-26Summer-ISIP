@@ -9,8 +9,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 
 /**
- * App-level photo analyzer. All AI analysis is performed by the on-device
- * Gemma 4 model; Qwen and network fallbacks are intentionally not used.
+ * App-level photo analyzer. AI analysis is performed by the on-device Qwen3.5
+ * model; when it is unavailable, the analyzer falls back to rule-based results.
  */
 class HybridPhotoContentAnalyzer(
     context: Context,
@@ -86,14 +86,14 @@ class HybridPhotoContentAnalyzer(
         return PhotoContentAnalysis(
             categories = listOf(category),
             tags = tags,
-            description = "基础分类结果（Gemma 模型未能运行）",
+            description = "基础分类结果（Qwen3.5 模型未能运行）",
             confidence = 0.3f,
             labels = tags.map { VisualLabel(it.removePrefix("#"), 0.3f) }
         )
     }
 
     private companion object {
-        const val TAG = "GemmaPhotoAnalyzer"
+        const val TAG = "QwenPhotoAnalyzer"
     }
 }
 
@@ -103,5 +103,5 @@ data class AnalyzerStatus(
     val currentMode: String
 ) {
     fun isAnyAvailable(): Boolean = localAvailable
-    fun getPreferredMode(): String = if (localAvailable) "local-gemma-4" else "fallback"
+    fun getPreferredMode(): String = if (localAvailable) "local-qwen3.5" else "fallback"
 }

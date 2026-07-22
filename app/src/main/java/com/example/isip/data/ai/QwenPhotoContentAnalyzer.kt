@@ -9,7 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Gemma 4 E2B PhotoContentAnalyzer 实现。
+ * Qwen3.5 PhotoContentAnalyzer 实现。
  *
  * 使用 llama.cpp + GGUF 格式的量化模型进行端侧图像分析，无需网络连接。
  */
@@ -57,7 +57,7 @@ class QwenPhotoContentAnalyzer(
 
             result
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Gemma 模型分析失败，返回基础结果", e)
+            android.util.Log.e(TAG, "Qwen3.5 模型分析失败，返回基础结果", e)
             // 回退到基础分析
             createFallbackAnalysis(photo)
         }
@@ -72,10 +72,10 @@ class QwenPhotoContentAnalyzer(
                 // 初始化 GGUF 模型（主模型 + 多模态投影层）
                 inferenceEngine.initialize(modelPath, mmProjPath)
                 isModelLoaded = true
-                android.util.Log.d(TAG, "Gemma GGUF 模型加载成功")
+                android.util.Log.d(TAG, "Qwen3.5 GGUF 模型加载成功")
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Gemma GGUF 模型加载失败", e)
-                throw ModelInitializationException("无法加载 Gemma 模型: ${e.message}", e)
+                android.util.Log.e(TAG, "Qwen3.5 GGUF 模型加载失败", e)
+                throw ModelInitializationException("无法加载 Qwen3.5 模型: ${e.message}", e)
             }
         }
     }

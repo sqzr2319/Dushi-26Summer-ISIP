@@ -1,5 +1,6 @@
 package com.example.isip.domain.skill
 
+import android.util.Log
 import com.example.isip.data.ai.PhotoContentAnalysis
 import com.example.isip.data.ai.PhotoContentAnalyzer
 import com.example.isip.data.ai.VisualLabel
@@ -42,7 +43,15 @@ class AnalyzeImageSkill(
             "detailConfidenceThreshold 必须在 0..1 之间"
         }
 
-        val clip = runCatching { clipAnalyzer?.analyze(input.photo) }.getOrNull()
+        val clip = try {
+            clipAnalyzer?.analyze(input.photo)
+        } catch (error: Exception) {
+            // Keep the detailed-model fallback, but do not hide a broken semantic
+            // index: without this log, image embedding failures looked like a normal
+            // low-confidence CLIP result and natural-language search had no vectors.
+            Log.w(TAG, "MobileCLIP embedding failed for ${input.photo.id}", error)
+            null
+        }
         val needsDetail = input.requireDetail || clip == null ||
             clip.categories.any { it in DETAIL_CATEGORIES }
         val detail = when {
@@ -117,6 +126,7 @@ class AnalyzeImageSkill(
     """.trimMargin()
 
     companion object {
+        private const val TAG = "AnalyzeImageSkill"
         const val DEFAULT_DETAIL_THRESHOLD = 0.40f
         private const val FALLBACK_CONFIDENCE = 0.2f
         private const val MAX_TERMS = 8
