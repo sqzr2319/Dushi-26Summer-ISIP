@@ -405,7 +405,7 @@ Java_com_example_isip_data_ai_LlamaCppNative_nativeLoadMmproj(
     }
 
     mtmd_context_params mparams = mtmd_context_params_default();
-    mparams.use_gpu          = false;
+    mparams.use_gpu          = true;
     mparams.print_timings    = false;
     mparams.n_threads        = 4;
     mparams.warmup           = true;
