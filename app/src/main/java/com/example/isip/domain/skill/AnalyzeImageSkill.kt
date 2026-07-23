@@ -53,7 +53,8 @@ class AnalyzeImageSkill(
             null
         }
         val needsDetail = input.requireDetail || clip == null ||
-            clip.categories.any { it in DETAIL_CATEGORIES }
+            clip.categories.any { it in DETAIL_CATEGORIES } ||
+            clip.confidence < input.detailConfidenceThreshold
         val detail = when {
             input.requireDetail -> requireNotNull(detailAnalyzer) {
                 "精细图片分析模型未配置"
@@ -127,7 +128,7 @@ class AnalyzeImageSkill(
 
     companion object {
         private const val TAG = "AnalyzeImageSkill"
-        const val DEFAULT_DETAIL_THRESHOLD = 0.40f
+        const val DEFAULT_DETAIL_THRESHOLD = 0.30f
         private const val FALLBACK_CONFIDENCE = 0.2f
         private const val MAX_TERMS = 8
         private val DETAIL_CATEGORIES = setOf("截图", "文档", "票据", "证件", "银行卡")

@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.provider.MediaStore
 import android.net.Uri
+import android.util.Log
 import com.example.isip.data.model.Photo
 import com.example.isip.domain.skill.AnalyzeImageSkill
 import com.example.isip.domain.skill.FindSimilarPhotosSkill
@@ -66,12 +67,14 @@ class MobileClipEngine private constructor(
         }.sortedByDescending { it.second }
         val probabilities = softmax(categoryScores.map { it.second * LOGIT_SCALE })
         val bestProbability = probabilities.firstOrNull() ?: 0f
+        Log.d(TAG, "CLIP 相似度: ${categoryScores.joinToString(", ") { "${it.first}=%.3f".format(it.second) }}")
         val categories = categoryScores.zip(probabilities)
             .filterIndexed { index, (_, probability) -> index == 0 || probability >= SECONDARY_CATEGORY_THRESHOLD }
             .take(MAX_CATEGORIES).map { it.first.first }
         val labels = categoryScores.zip(probabilities).take(MAX_LABELS).map { (item, probability) ->
             VisualLabel(item.first, probability)
         }
+        Log.d(TAG, "CLIP 分析 ${photo.id}: categories=$categories, confidence=${"%.2f".format(bestProbability)}")
         AnalyzeImageSkill.ClipAnalysis(
             categories = categories,
             labels = labels,
@@ -280,6 +283,7 @@ class MobileClipEngine private constructor(
     }
 
     companion object {
+        private const val TAG = "MobileClipEngine"
         const val MODEL_NAME = "mobileclip-s2-litert"
         private const val MAX_VISUAL_DUPLICATE_SCAN = 500
         const val MODEL_VERSION = "datacompdr"
@@ -295,22 +299,35 @@ class MobileClipEngine private constructor(
 
         private data class CategoryPrompt(val category: String, val prompt: String)
         private val CATEGORY_PROMPTS = listOf(
-            CategoryPrompt("人物", "a photo of people or a portrait"),
-            CategoryPrompt("风景", "a landscape or nature photo"),
-            CategoryPrompt("美食", "a photo of food or a meal"),
-            CategoryPrompt("截图", "a smartphone screenshot"),
-            CategoryPrompt("文档", "a photo of a document with text"),
-            CategoryPrompt("票据", "a receipt or invoice"),
-            CategoryPrompt("证件", "an identity card or official document"),
-            CategoryPrompt("宠物", "a photo of a pet or animal"),
-            CategoryPrompt("出行", "a travel photo or vehicle"),
-            CategoryPrompt("其他", "an ordinary miscellaneous photo")
+            CategoryPrompt("人物", "a photo of one or more people, a portrait, a selfie, a group of friends or family"),
+            CategoryPrompt("风景", "a landscape photo, mountains, sea, beach, sunset, outdoor scenery, nature view"),
+            CategoryPrompt("美食", "a close-up photo of food, a meal, a dish on a plate, cooking, restaurant food"),
+            CategoryPrompt("截图", "a screenshot of a smartphone screen, a mobile app interface, a social media screenshot"),
+            CategoryPrompt("文档", "a photo of a document, a page with text, a printed paper, a form or contract"),
+            CategoryPrompt("票据", "a receipt, an invoice, a bill, a payment slip, a sales receipt"),
+            CategoryPrompt("证件", "an ID card, a passport, a driver's license, an official identification document"),
+            CategoryPrompt("宠物", "a photo of a pet, a cat, a dog, an animal, a cute animal portrait"),
+            CategoryPrompt("出行", "a travel photo, a vehicle, a car, an airplane, a train station, an airport"),
+            CategoryPrompt("其他", "an ordinary miscellaneous photo, a general everyday photo")
         )
 
         fun createOrNull(context: Context): MobileClipEngine? {
             val dir = File(context.filesDir, "clip")
             val required = listOf(IMAGE_MODEL, TEXT_MODEL, TOKENIZER_FILE)
-            return if (required.all { File(dir, it).isFile }) MobileClipEngine(context, dir) else null
+            val missing = required.filterNot { File(dir, it).isFile }
+            if (missing.isNotEmpty()) {
+                Log.w(TAG, "CLIP 文件缺失: $missing (dir: ${dir.absolutePath})")
+                return null
+            }
+            Log.i(TAG, "CLIP 所有文件就绪，初始化引擎...")
+            return try {
+                MobileClipEngine(context, dir).also {
+                    Log.i(TAG, "✅ CLIP 引擎初始化成功")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ CLIP 引擎初始化失败", e)
+                null
+            }
         }
 
         fun modelDirectory(context: Context): File = File(context.filesDir, "clip")
