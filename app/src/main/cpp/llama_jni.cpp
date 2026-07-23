@@ -5,6 +5,9 @@
 #include "llama.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
+#ifdef GGML_USE_VULKAN
+#include "ggml-vulkan.h"
+#endif
 
 #define LOG_TAG "LlamaJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -61,6 +64,24 @@ Java_com_example_isip_data_ai_LlamaCppNative_nativeInit(
     llama_log_set(llama_log_to_logcat, nullptr);
 
     try {
+        // 手动注册 Vulkan 后端（静态编译需要显式注册）
+#ifdef GGML_USE_VULKAN
+        LOGI("正在注册 Vulkan GPU 后端...");
+        {
+            int vk_devices = ggml_backend_vk_get_device_count();
+            LOGI("Vulkan 设备数量: %d", vk_devices);
+            if (vk_devices > 0) {
+                ggml_backend_reg_t vk_reg = ggml_backend_vk_reg();
+                if (vk_reg) {
+                    LOGI("Vulkan 后端注册成功");
+                } else {
+                    LOGW("Vulkan 后端注册失败");
+                }
+            } else {
+                LOGW("未找到 Vulkan 设备");
+            }
+        }
+#endif
         // 加载动态后端
         LOGI("正在加载 ggml 后端...");
         ggml_backend_load_all();
