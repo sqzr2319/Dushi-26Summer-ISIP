@@ -1,6 +1,7 @@
 package com.example.isip.domain.usecase
 
 import com.example.isip.data.PhotoRepository
+import com.example.isip.data.ai.HybridPhotoContentAnalyzer
 import com.example.isip.data.ai.PhotoContentAnalysis
 import com.example.isip.data.ai.PhotoContentAnalyzer
 import com.example.isip.data.ai.VisualLabel
@@ -24,7 +25,16 @@ class AnalyzePhotosUseCase(
      * Old rule-based rows (which have no model metadata) are automatically
      * upgraded the next time this batch operation is run.
      */
-    fun analyzeAllPhotos(): Flow<AnalysisProgress> = flow {
+    /**
+     * Analyzes every photo that was not produced by the current model version.
+     * Old rule-based rows (which have no model metadata) are automatically
+     * upgraded the next time this batch operation is run.
+     *
+     * @param limit 最多分析多少张（默认不限）。这个参数存在的理由是**让批量流水线路径
+     *   可被小规模验证** —— 相册里有 13,678 张，不限制就只能跑完整批才知道它是否工作，
+     *   而"跑完整批"要几十小时。诊断入口用它跑 4 张即可确认流水线真的生效。
+     */
+    fun analyzeAllPhotos(limit: Int = Int.MAX_VALUE): Flow<AnalysisProgress> = flow {
         val photos = photoRepository.getAllPhotos()
         val existingByPhotoId = photoRepository.getAllAnalysisResults()
             .associateBy { it.photoId }
@@ -33,14 +43,43 @@ class AnalyzePhotosUseCase(
 
         emit(AnalysisProgress(total, completed, "Preparing on-device analysis…"))
 
-        photos.forEach { photo ->
-            val existing = existingByPhotoId[photo.id]
-            if (isCurrentModelResult(existing)) {
-                completed++
-                emit(AnalysisProgress(total, completed, "Skipped: ${photo.fileName}"))
-                return@forEach
-            }
+        // 先挑出真正需要分析的照片，剩下的（已有当前模型结果）直接计入已完成。
+        // 这样流水线拿到的是一个干净的列表，不必在管道内部再判断跳过。
+        val pending = photos.filterNot { isCurrentModelResult(existingByPhotoId[it.id]) }
+            .take(limit)
+        completed = total - pending.size
 
+        // 流水线：视觉塔（CPU）与 LLM（NPU）重叠，实测约 13.3 s/张 vs 串行 20.1 s/张。
+        //
+        // **只在 [ModelConfig.enableBatchPipeline] 打开时启用，默认关闭**，因为它要求
+        // 视觉塔线程数降到 4 左右才有效（8 线程会与 LLM 争抢 CPU，反而比串行慢）。
+        // 详见 ModelConfig.enableBatchPipeline 的实测对照表。
+        //
+        // 另外两个前提：
+        //  - 分析器确实是 HybridPhotoContentAnalyzer（只有它有 analyzeBatch）；
+        //  - **clipEngine 为空**。流水线直接走精细分析，跳过了 AnalyzeImageSkill 里
+        //    "CLIP 置信度够高就不调大模型"那一层。将来若部署了 MobileCLIP，
+        //    走流水线会与串行路径的语义不一致，所以那种情况下退回串行。
+        val pipelined = contentAnalyzer as? HybridPhotoContentAnalyzer
+        val pipelineWanted = pipelined?.getStatus() != null &&
+            pipelined.isBatchPipelineEnabled() &&
+            clipEngine == null && pending.size > 1
+        if (pipelineWanted && pipelined != null) {
+            pipelined.analyzeBatch(pending).collect { (photo, analysis) ->
+                try {
+                    photoRepository.saveAnalysisResult(buildModelResult(photo, analysis))
+                    completed++
+                    emit(AnalysisProgress(total, completed, "Analyzed: ${photo.fileName}"))
+                } catch (error: Exception) {
+                    completed++
+                    emit(AnalysisProgress(total, completed, "Failed: ${photo.fileName} - ${error.message}"))
+                }
+            }
+            emit(AnalysisProgress(total, completed, "Analysis complete"))
+            return@flow
+        }
+
+        pending.forEach { photo ->
             try {
                 val result = analyzePhoto(photo)
                 photoRepository.saveAnalysisResult(result)

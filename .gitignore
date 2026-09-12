@@ -18,4 +18,38 @@ local.properties
 *.gguf
 .venv-qwen/
 tools/qwen35_server.*.log
+
+# Output of tools/verify-production.ps1 - regenerated on every run.
+/tools/verify-production.txt
+__pycache__/
 build-vk-gen-msvc/  
+
+# Vendored Khronos headers for the Vulkan GPU backend (fixed versions, fetched with
+# sparse checkout; see app/src/main/cpp/third_party/khronos/README.md).
+# Kept out of Git because they are third-party sources with their own licensing.
+/app/src/main/cpp/third_party/khronos/
+
+# Scratch space for downloaded model files and the on-device benchmark helpers.
+# Models are ~1.2 GB each; they are pushed to the device, never committed.
+/build-models/
+
+# Built Hexagon/NPU artifacts (libggml-hexagon.so + DSP skels). Kept out of Git
+# because the skels link QURT/HAP libraries whose terms come from the Qualcomm
+# SDK. See build-models/collect-npu-artifacts.sh and doc/npu-hexagon-status.md.
+/build-models/npu/
+
+# 同一批产物被 collect-npu-artifacts.sh 复制到这里供打包，所以这里也要挡住 ——
+# 只挡住 /build-models/npu/ 是不够的，它们仍会以未跟踪文件的形式出现在
+# app/src/main/jniLibs/ 下，一个 `git add -A` 就会把 Qualcomm 派生的 skel 带进仓库。
+# 克隆后需按该脚本自行构建。
+/app/src/main/jniLibs/**/libggml-hexagon-*.so
+/app/src/main/jniLibs/**/libggml-htp-*.so
+
+# Baseline build logs kept for comparison while the native build was being repaired.
+/build-*.log
+
+# Output of tools/latency-matrix.ps1 - regenerated on every run.
+/tools/latency-matrix.txt
+
+# CMake build tree for the Vulkan shader generator (build artifacts only).
+/build-vk-gen/

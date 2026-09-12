@@ -3621,9 +3621,6 @@ extern const unsigned char opt_step_adamw_f32_data[];
 extern const uint64_t opt_step_sgd_f32_len;
 extern const unsigned char opt_step_sgd_f32_data[];
 
-extern const uint64_t out_prod_f32_len;
-extern const unsigned char out_prod_f32_data[];
-
 extern const uint64_t pad_f32_len;
 extern const unsigned char pad_f32_data[];
 
@@ -3729,125 +3726,65 @@ extern const unsigned char rwkv_wkv7_f32_data[];
 extern const uint64_t scale_f32_len;
 extern const unsigned char scale_f32_data[];
 
-extern const uint64_t set_rows_f16_bf16_i32_len;
-extern const unsigned char set_rows_f16_bf16_i32_data[];
+extern const uint64_t set_rows_bf16_i32_len;
+extern const unsigned char set_rows_bf16_i32_data[];
 
-extern const uint64_t set_rows_f16_bf16_i64_len;
-extern const unsigned char set_rows_f16_bf16_i64_data[];
+extern const uint64_t set_rows_bf16_i64_len;
+extern const unsigned char set_rows_bf16_i64_data[];
 
-extern const uint64_t set_rows_f16_f16_i32_len;
-extern const unsigned char set_rows_f16_f16_i32_data[];
+extern const uint64_t set_rows_f16_i32_len;
+extern const unsigned char set_rows_f16_i32_data[];
 
-extern const uint64_t set_rows_f16_f16_i64_len;
-extern const unsigned char set_rows_f16_f16_i64_data[];
+extern const uint64_t set_rows_f16_i64_len;
+extern const unsigned char set_rows_f16_i64_data[];
 
-extern const uint64_t set_rows_f16_f32_i32_len;
-extern const unsigned char set_rows_f16_f32_i32_data[];
+extern const uint64_t set_rows_f32_i32_len;
+extern const unsigned char set_rows_f32_i32_data[];
 
-extern const uint64_t set_rows_f16_f32_i64_len;
-extern const unsigned char set_rows_f16_f32_i64_data[];
+extern const uint64_t set_rows_f32_i64_len;
+extern const unsigned char set_rows_f32_i64_data[];
 
-extern const uint64_t set_rows_f16_iq4_nl_i32_len;
-extern const unsigned char set_rows_f16_iq4_nl_i32_data[];
+extern const uint64_t set_rows_iq4_nl_i32_len;
+extern const unsigned char set_rows_iq4_nl_i32_data[];
 
-extern const uint64_t set_rows_f16_iq4_nl_i64_len;
-extern const unsigned char set_rows_f16_iq4_nl_i64_data[];
+extern const uint64_t set_rows_iq4_nl_i64_len;
+extern const unsigned char set_rows_iq4_nl_i64_data[];
 
-extern const uint64_t set_rows_f16_q1_0_i32_len;
-extern const unsigned char set_rows_f16_q1_0_i32_data[];
+extern const uint64_t set_rows_q1_0_i32_len;
+extern const unsigned char set_rows_q1_0_i32_data[];
 
-extern const uint64_t set_rows_f16_q1_0_i64_len;
-extern const unsigned char set_rows_f16_q1_0_i64_data[];
+extern const uint64_t set_rows_q1_0_i64_len;
+extern const unsigned char set_rows_q1_0_i64_data[];
 
-extern const uint64_t set_rows_f16_q4_0_i32_len;
-extern const unsigned char set_rows_f16_q4_0_i32_data[];
+extern const uint64_t set_rows_q4_0_i32_len;
+extern const unsigned char set_rows_q4_0_i32_data[];
 
-extern const uint64_t set_rows_f16_q4_0_i64_len;
-extern const unsigned char set_rows_f16_q4_0_i64_data[];
+extern const uint64_t set_rows_q4_0_i64_len;
+extern const unsigned char set_rows_q4_0_i64_data[];
 
-extern const uint64_t set_rows_f16_q4_1_i32_len;
-extern const unsigned char set_rows_f16_q4_1_i32_data[];
+extern const uint64_t set_rows_q4_1_i32_len;
+extern const unsigned char set_rows_q4_1_i32_data[];
 
-extern const uint64_t set_rows_f16_q4_1_i64_len;
-extern const unsigned char set_rows_f16_q4_1_i64_data[];
+extern const uint64_t set_rows_q4_1_i64_len;
+extern const unsigned char set_rows_q4_1_i64_data[];
 
-extern const uint64_t set_rows_f16_q5_0_i32_len;
-extern const unsigned char set_rows_f16_q5_0_i32_data[];
+extern const uint64_t set_rows_q5_0_i32_len;
+extern const unsigned char set_rows_q5_0_i32_data[];
 
-extern const uint64_t set_rows_f16_q5_0_i64_len;
-extern const unsigned char set_rows_f16_q5_0_i64_data[];
+extern const uint64_t set_rows_q5_0_i64_len;
+extern const unsigned char set_rows_q5_0_i64_data[];
 
-extern const uint64_t set_rows_f16_q5_1_i32_len;
-extern const unsigned char set_rows_f16_q5_1_i32_data[];
+extern const uint64_t set_rows_q5_1_i32_len;
+extern const unsigned char set_rows_q5_1_i32_data[];
 
-extern const uint64_t set_rows_f16_q5_1_i64_len;
-extern const unsigned char set_rows_f16_q5_1_i64_data[];
+extern const uint64_t set_rows_q5_1_i64_len;
+extern const unsigned char set_rows_q5_1_i64_data[];
 
-extern const uint64_t set_rows_f16_q8_0_i32_len;
-extern const unsigned char set_rows_f16_q8_0_i32_data[];
+extern const uint64_t set_rows_q8_0_i32_len;
+extern const unsigned char set_rows_q8_0_i32_data[];
 
-extern const uint64_t set_rows_f16_q8_0_i64_len;
-extern const unsigned char set_rows_f16_q8_0_i64_data[];
-
-extern const uint64_t set_rows_f32_bf16_i32_len;
-extern const unsigned char set_rows_f32_bf16_i32_data[];
-
-extern const uint64_t set_rows_f32_bf16_i64_len;
-extern const unsigned char set_rows_f32_bf16_i64_data[];
-
-extern const uint64_t set_rows_f32_f16_i32_len;
-extern const unsigned char set_rows_f32_f16_i32_data[];
-
-extern const uint64_t set_rows_f32_f16_i64_len;
-extern const unsigned char set_rows_f32_f16_i64_data[];
-
-extern const uint64_t set_rows_f32_f32_i32_len;
-extern const unsigned char set_rows_f32_f32_i32_data[];
-
-extern const uint64_t set_rows_f32_f32_i64_len;
-extern const unsigned char set_rows_f32_f32_i64_data[];
-
-extern const uint64_t set_rows_f32_iq4_nl_i32_len;
-extern const unsigned char set_rows_f32_iq4_nl_i32_data[];
-
-extern const uint64_t set_rows_f32_iq4_nl_i64_len;
-extern const unsigned char set_rows_f32_iq4_nl_i64_data[];
-
-extern const uint64_t set_rows_f32_q1_0_i32_len;
-extern const unsigned char set_rows_f32_q1_0_i32_data[];
-
-extern const uint64_t set_rows_f32_q1_0_i64_len;
-extern const unsigned char set_rows_f32_q1_0_i64_data[];
-
-extern const uint64_t set_rows_f32_q4_0_i32_len;
-extern const unsigned char set_rows_f32_q4_0_i32_data[];
-
-extern const uint64_t set_rows_f32_q4_0_i64_len;
-extern const unsigned char set_rows_f32_q4_0_i64_data[];
-
-extern const uint64_t set_rows_f32_q4_1_i32_len;
-extern const unsigned char set_rows_f32_q4_1_i32_data[];
-
-extern const uint64_t set_rows_f32_q4_1_i64_len;
-extern const unsigned char set_rows_f32_q4_1_i64_data[];
-
-extern const uint64_t set_rows_f32_q5_0_i32_len;
-extern const unsigned char set_rows_f32_q5_0_i32_data[];
-
-extern const uint64_t set_rows_f32_q5_0_i64_len;
-extern const unsigned char set_rows_f32_q5_0_i64_data[];
-
-extern const uint64_t set_rows_f32_q5_1_i32_len;
-extern const unsigned char set_rows_f32_q5_1_i32_data[];
-
-extern const uint64_t set_rows_f32_q5_1_i64_len;
-extern const unsigned char set_rows_f32_q5_1_i64_data[];
-
-extern const uint64_t set_rows_f32_q8_0_i32_len;
-extern const unsigned char set_rows_f32_q8_0_i32_data[];
-
-extern const uint64_t set_rows_f32_q8_0_i64_len;
-extern const unsigned char set_rows_f32_q8_0_i64_data[];
+extern const uint64_t set_rows_q8_0_i64_len;
+extern const unsigned char set_rows_q8_0_i64_data[];
 
 extern const uint64_t sgn_f16_len;
 extern const unsigned char sgn_f16_data[];

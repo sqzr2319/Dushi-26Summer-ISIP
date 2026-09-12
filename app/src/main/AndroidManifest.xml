@@ -31,6 +31,33 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.ISIP">
+
+        <!--
+          高通 FastRPC 传输层，NPU（Hexagon HTP）推理必需。
+
+          libcdsprpc.so 位于 /vendor/lib64，属于 "vendor public library"。Android 的
+          链接器命名空间默认不允许普通 App 看到 vendor 库，因此必须在 application
+          内显式声明（该元素只能放在这里，放在 manifest 下会 AAPT 报错）。
+          否则 ggml-hexagon 后端会在 dlopen("libcdsprpc.so") 处失败：
+            dlopen failed: library "libcdsprpc.so" not found
+
+          required="false"：缺失时应用仍可运行，加速退回 CPU/Vulkan，
+          因此不应阻止在不支持的设备上安装。
+        -->
+        <uses-native-library
+            android:name="libcdsprpc.so"
+            android:required="false" />
+
+        <!-- GenieX 的 AAR 自己声明了这三个（libadsprpc / libcdsprpc / libOpenCL）。
+             合并后取并集，这里补上它需要而上面没写的两个，语义保持一致：
+             缺失时退回 CPU，不应阻碍安装。 -->
+        <uses-native-library
+            android:name="libadsprpc.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,10 +70,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 手动多模态测试页，同时承载可由 adb 无人值守触发的基准模式。
+             导出是为了能用 adb shell am start 驱动 A/B 对比；它不暴露任何数据。
+             用法见 MultimodalTestActivity 的类注释。 -->
         <activity
             android:name=".MultimodalTestActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="多模态测试" />
+        <!-- Qualcomm GenieX NPU 验证页。同样是 exported 以便 adb 无人值守触发；
+             它只读本应用私有目录下的模型文件，不暴露数据。
+             用法见 GenieXNpuTestActivity 的类注释。 -->
+        <activity
+            android:name=".GenieXNpuTestActivity"
+            android:exported="true"
+            android:label="GenieX NPU 测试" />
     </application>
 
 </manifest>

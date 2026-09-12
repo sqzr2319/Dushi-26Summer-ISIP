@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.isip.data.ai.AccelerationBackend
 import com.example.isip.data.ai.QwenModel
 import com.example.isip.data.ai.QwenInferenceEngine
 import com.example.isip.data.ai.ModelConfig
@@ -33,31 +34,39 @@ class QwenIntegrationTest {
                 try {
                     Log.i(TAG, "=== 开始测试 Qwen3.5 模型集成 ===")
 
-                    // 1. 检查模型文件
+                    // 1. 检查模型文件（首次调用会把 assets 里的模型复制到私有目录）
+                    //
+                    // 用候选链而不是写死的 MODEL_FILE_NAME：后者指向 4B，设备上只部署
+                    // 2B 时这个自检会误报"主模型不可用"。
                     Log.i(TAG, "1. 检查模型文件...")
-                    val mainModelPath = QwenModel.MODEL_ASSET_PATH
-                    val mmProjPath = QwenModel.MMPROJ_ASSET_PATH
+                    val picked = QwenModel.ensurePreferredModel(activity)
+                    val mainModelPath = picked?.second
+                    val mmProjPath = QwenModel.ensureAvailable(activity, QwenModel.MMPROJ_FILE_NAME)
 
-                    val mainModelFile = File(activity.filesDir, mainModelPath)
-                    val mmProjFile = File(activity.filesDir, mmProjPath)
-
-                    if (!mainModelFile.exists()) {
-                        Log.w(TAG, "⚠️ 主模型文件不存在: ${mainModelFile.absolutePath}")
-                        Log.w(TAG, "尝试从 assets 加载...")
+                    if (mainModelPath == null) {
+                        Log.e(TAG, "❌ 主模型不可用，候选: ${QwenModel.MODEL_FILE_CANDIDATES}")
+                        return@launch
                     }
+                    if (mmProjPath == null) {
+                        Log.e(TAG, "❌ 多模态投影层不可用: ${QwenModel.MMPROJ_FILE_NAME}")
+                        return@launch
+                    }
+                    Log.i(TAG, "主模型: $mainModelPath")
+                    Log.i(TAG, "投影层: $mmProjPath")
 
                     // 2. 初始化推理引擎
+                    //
+                    // 必须复用生产配置，不能自造一份。理由：QwenInferenceEngine 是
+                    // 进程内单例，config 只在**首次创建**时生效 —— 如果这个自检入口先跑，
+                    // 它会把单例锁在自己的配置上，之后生产路径传的 PRODUCTION_CONFIG
+                    // 被静默忽略，表现为"输出莫名其妙不对"。
+                    //
+                    // 这里原先自造了一份带旧值的配置（quantizationType = Q2_K_XL、
+                    // maxTokens = 256），正是上面那种污染源。
                     Log.i(TAG, "2. 初始化推理引擎...")
                     val engine = QwenInferenceEngine.getInstance(
                         activity,
-                        ModelConfig(
-                            useGPU = true,
-                            numThreads = 4,
-                            maxTokens = 256,
-                            temperature = 0.3f,
-                            contextSize = 2048,
-                            quantizationType = QuantizationType.Q4_0
-                        )
+                        com.example.isip.data.ai.HybridPhotoContentAnalyzer.PRODUCTION_CONFIG
                     )
 
                     engine.initialize(

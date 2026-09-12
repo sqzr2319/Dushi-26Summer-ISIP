@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
@@ -135,6 +137,49 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     title = "模型状态",
                     description = uiState.modelStatus
                 )
+            }
+
+            // ---- NPU 加速 ----
+            // 这里只做"如实展示 + 给用户一个出口"。降级是自动的：连续失败达阈值后
+            // AcceleratorPolicy 会让后续分析直接走 CPU，不需要用户干预。
+            item { SettingsSectionHeader("NPU 加速") }
+            item {
+                SettingRow(
+                    icon = Icons.Default.Memory,
+                    title = "加速状态",
+                    description = uiState.acceleratorStatus
+                )
+            }
+            if (uiState.npuFailureCount > 0) {
+                item {
+                    SettingRow(
+                        icon = Icons.Default.Info,
+                        title = "上次失败原因",
+                        description = uiState.npuLastFailure ?: "未记录"
+                    )
+                }
+            }
+            item {
+                SettingRow(
+                    icon = Icons.Default.Refresh,
+                    title = "重置 NPU 状态",
+                    description = if (uiState.npuFailureCount > 0) {
+                        "已连续失败 ${uiState.npuFailureCount} 次；重置后下次分析重新尝试"
+                    } else {
+                        "清除失败计数并重新允许使用 NPU"
+                    },
+                    onClick = { viewModel.onEvent(SettingsUiEvent.ResetNpu) }
+                )
+            }
+            if (uiState.npuEnabled) {
+                item {
+                    SettingRow(
+                        icon = Icons.Default.Close,
+                        title = "关闭 NPU",
+                        description = "后续分析固定使用 CPU",
+                        onClick = { viewModel.onEvent(SettingsUiEvent.DisableNpu) }
+                    )
+                }
             }
 
             item { SettingsSectionHeader("隐私控制") }

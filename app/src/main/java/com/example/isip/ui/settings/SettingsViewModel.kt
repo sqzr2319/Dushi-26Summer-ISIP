@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.isip.data.ai.AcceleratorPolicy
 
 data class SettingsUiState(
     val hasMediaPermission: Boolean = false,
@@ -32,7 +33,17 @@ data class SettingsUiState(
     val cacheSize: String = "计算中…",
     val versionName: String = BuildConfig.VERSION_NAME,
     val message: String? = null,
-    val isBusy: Boolean = false
+    val isBusy: Boolean = false,
+
+    // ---- NPU 加速状态（如实展示，不假设） ----
+    /** 策略层面当前会用的加速级别。 */
+    val acceleratorStatus: String = "",
+    /** 是否允许尝试 NPU。 */
+    val npuEnabled: Boolean = true,
+    /** 连续失败次数；达到阈值即自动降级。 */
+    val npuFailureCount: Int = 0,
+    /** 上次失败的原始原因，便于排查。 */
+    val npuLastFailure: String? = null
 )
 
 sealed interface SettingsUiEvent {
@@ -45,12 +56,18 @@ sealed interface SettingsUiEvent {
     data object ClearCache : SettingsUiEvent
     data object ClearAllAnalysis : SettingsUiEvent
     data object DismissMessage : SettingsUiEvent
+
+    /** 关闭 NPU，强制走 CPU。 */
+    data object DisableNpu : SettingsUiEvent
+    /** 清除失败计数并重新允许 NPU（用于"再试一次"）。 */
+    data object ResetNpu : SettingsUiEvent
 }
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = AppSettingsRepository(application)
     private val photoRepository = PhotoRepository.getInstance(application)
     private val modelManager = ModelManager.getInstance(application)
+    private val acceleratorPolicy = AcceleratorPolicy(application)
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -69,6 +86,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             SettingsUiEvent.ClearCache -> clearCache()
             SettingsUiEvent.ClearAllAnalysis -> clearAllAnalysis()
             SettingsUiEvent.DismissMessage -> _uiState.update { it.copy(message = null) }
+            SettingsUiEvent.DisableNpu -> {
+                acceleratorPolicy.disableNpu()
+                refresh()
+                _uiState.update { it.copy(message = "已关闭 NPU，后续分析使用 CPU") }
+            }
+            SettingsUiEvent.ResetNpu -> {
+                acceleratorPolicy.resetNpu()
+                refresh()
+                _uiState.update { it.copy(message = "已重置 NPU 状态，下次分析将重新尝试") }
+            }
         }
     }
 
@@ -87,7 +114,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 protectSensitivePhotos = settings.protectSensitivePhotos,
                 modelLoaded = modelReady(),
                 modelStatus = modelStatus(),
-                cacheSize = cacheSize()
+                cacheSize = cacheSize(),
+                acceleratorStatus = acceleratorPolicy.describe(),
+                npuEnabled = acceleratorPolicy.isNpuEnabled(),
+                npuFailureCount = acceleratorPolicy.failureCount(),
+                npuLastFailure = acceleratorPolicy.lastFailureReason()
             )
         }
     }
@@ -166,9 +197,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(getApplication(), permission) == PackageManager.PERMISSION_GRANTED
 
-    private fun modelReady(): Boolean =
-        modelManager.isModelAvailable(QwenModel.MODEL_FILE_NAME) &&
-            modelManager.isModelAvailable(QwenModel.MMPROJ_FILE_NAME)
+    /**
+     * 主模型是否可用。
+     *
+     * 走候选链而不是只查 [QwenModel.MODEL_FILE_NAME]：后者写死 4B，而设备上完全可能
+     * 只部署了 2B（候选链的第二项）。只查 4B 会让设置页在 2B 可用的情况下显示
+     * "未安装模型，将使用轻量分类" —— 与实际的推理能力不符。
+     */
+    private fun modelReady(): Boolean = QwenModel.preferredModelFileName(getApplication()) != null
 
     private fun modelStatus(): String = if (modelReady()) {
         "本地视觉模型可用"
